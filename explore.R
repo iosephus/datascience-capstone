@@ -8,7 +8,7 @@ data.file.blogs <- "en_US.blogs.txt"
 data.file.news <- "en_US.news.txt"
 data.file.twitter <- "en_US.twitter.txt"
 
-line.limit = 1000
+line.limit = 10000
 text.encoding = "unknown"
 text.language = "en"
 
@@ -29,6 +29,7 @@ dtm <- DocumentTermMatrix(corpus, control=list(wordLengths=c(3,Inf)))
 # dtm.st <- DocumentTermMatrix(corpus.stemmed)
 
 # Create cloud of words
-freq <- sort(colSums(as.matrix(dtm)), decreasing=TRUE)
+dtm2 <- removeSparseTerms(dtm, 0.4)
+freq <- sort(colSums(as.matrix(dtm2)), decreasing=TRUE)
 words <- names(freq)
 wordcloud(words[1:100], freq[1:100])
