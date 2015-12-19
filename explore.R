@@ -3,12 +3,23 @@ library(tm)
 library(SnowballC)
 library(wordcloud)
 
+fix.unicode <- function(text.data) {
+  result <- text.data
+  result <- gsub('â???¦', '.', result)
+  result <- gsub('â???"', '-', result)
+  result <- gsub('â???"', '-', result)
+  result <- gsub('â???T', ''', result)
+  result <- gsub('â???o', '"', result)
+  result <- gsub('â???[:cntrl:]', '"', result)
+  return(result)
+}
+
 data.dir <- "C:\\Users\\JoseM\\Projects\\Capstone\\Data\\Coursera-SwiftKey\\final\\en_US"
 data.file.blogs <- "en_US.blogs.txt"
 data.file.news <- "en_US.news.txt"
 data.file.twitter <- "en_US.twitter.txt"
 
-line.limit = 10000
+line.limit = 5000
 text.encoding = "unknown"
 text.language = "en"
 
@@ -16,8 +27,13 @@ content.blogs <- do.call(paste, as.list(readLines(file.path(data.dir, data.file.
 content.news <- do.call(paste, as.list(readLines(file.path(data.dir, data.file.news), n = line.limit, encoding=text.encoding)))
 content.twitter <- do.call(paste, as.list(readLines(file.path(data.dir, data.file.twitter), n = line.limit, encoding=text.encoding)))
 
-corpus <- Corpus(VectorSource(c(content.blogs, content.news, content.twitter)), readerControl=list(language="en"))
-corpus <- tm_map(corpus, content_transformer(tolower))
+content.blogs <- fix.unicode(content.blogs)
+content.news <- fix.unicode(content.news)
+content.twitter <- fix.unicode(content.twitter)
+
+corpus <- Corpus(VectorSource(c(content.blogs, content.news, content.twitter)), readerControl=list(language=text.language))
+#corpus <- tm_map(corpus, function(x) iconv(x, to='UTF-8', sub='byte'))
+corpus <- tm_map(corpus, tolower)
 corpus <- tm_map(corpus, removeWords, stopwords(text.language))
 corpus <- tm_map(corpus, stripWhitespace)
 corpus <- tm_map(corpus, removePunctuation)
