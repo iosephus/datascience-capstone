@@ -1,0 +1,31 @@
+---
+title: 'Data Science Capstone: Exploratory Analysis'
+author: "Jose M. Perez-Sanchez"
+date: "December 20, 2015"
+output: html_document
+---
+
+```{r, echo=FALSE}
+library(knitr)
+library(ggplot2)
+```
+
+# Introduction
+
+This report contains an exploratory analysis of the dataset provided for the capstone project of the JHU Data Science Coursera Specialization. The dataset is a text corpus containing document in English, German, Russian and Finish. We analyze in this report the three American English portion of the corpus which is contained in the three plain text files:
+
+* en_US.blogs.txt
+* en_US.news.txt
+* en_US.twitter.txt
+
+The dataset was downloaded from a Coursera provided [link](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip) and according to the course documentation it was created from a corpus called HC Corpora. More info about how the original corpus was compiled can be found in the [About the Corpora](http://www.corpora.heliohost.org/aboutcorpus.html) section of the HC Corpora website. 
+
+# Data loading
+
+The documents were loaded into R using the *readLines* function with a "unknown" value for the text encoding. The document contained "bad unicode character sequences", typical from the document being processed at some point in its life with the wrong encoding. Those occurrences were fixed using the following substitutions:
+
+
+```{r, echo=FALSE}
+unicode.fixes <- data.frame("Bad Unicode sequences"=c('â€¦', 'â€“', 'â€”', 'â€™', 'â€œ', 'â€[[:cntrl:]]'), "Replacement"= c('…', '–', '–', '’', '“', '”'))
+kable(unicode.fixes)
+```
