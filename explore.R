@@ -1,16 +1,17 @@
 
+library(tidyr)
 library(tm)
 library(SnowballC)
 library(wordcloud)
 
 fix.unicode <- function(text.data) {
   result <- text.data
-  result <- gsub('�???�', '.', result)
-  result <- gsub('�???"', '-', result)
-  result <- gsub('�???"', '-', result)
-  result <- gsub('�???T', ''', result)
-  result <- gsub('�???o', '"', result)
-  result <- gsub('�???[[:cntrl:]]', '"', result)
+  result <- gsub('â€¦', '…', result)
+  result <- gsub('â€“', '–', result)
+  result <- gsub('â€”', '–', result)
+  result <- gsub('â€™', '’', result)
+  result <- gsub('â€œ', '“', result)
+  result <- gsub('â€[[:cntrl:]]', '”', result)
   return(result)
 }
 
@@ -27,51 +28,75 @@ NGramTokenizerFuncBuilder <- function(n) {
   return(f)
 }
 
-data.dir <- "C:\\Users\\JoseM\\Projects\\Capstone\\Data\\Coursera-SwiftKey\\final\\en_US"
-data.file.blogs <- "en_US.blogs.txt"
-data.file.news <- "en_US.news.txt"
-data.file.twitter <- "en_US.twitter.txt"
 
-line.limit = -1
-text.encoding = "unknown"
-text.language = "en"
+get.file.list <- function(dir.path, pattern="*.txt") {
+  files <- sapply(list.files(data.dir, pattern="*.txt"), FUN=function(fname) file.path(dir.path, fname))
+  return(files)
+}
 
-content.blogs <- readLines(file.path(data.dir, data.file.blogs), n = line.limit, encoding=text.encoding)
-content.news <- readLines(file.path(data.dir, data.file.news), n = line.limit, encoding=text.encoding)
-content.twitter <- readLines(file.path(data.dir, data.file.twitter), n = line.limit, encoding=text.encoding)
+load.corpus.file <- function(path, max.lines=-1, encoding="UTF-8") {
+  lines <- readLines(path, n = max.lines, encoding=encoding)
+  result <- data.frame(line=seq(1, length(lines)), content=lines)
+  result$file <- basename(path)
+  result$content <- as.character(result$content)
+  return(result)
+}
 
-content.blogs <- fix.unicode(content.blogs)
-content.news <- fix.unicode(content.news)
-content.twitter <- fix.unicode(content.twitter)
+load.corpus.content <- function(dir.path, max.lines=-1, encoding='unknown') {
+  files <- get.file.list(dir.path, pattern="*.txt")
+  contents <- lapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding))
+  result <- do.call(rbind, contents)
+  rownames(result) <- NULL
+  result$file = as.factor(result$file)
+  return(result)
+}
 
-corpus <- Corpus(VectorSource(c(content.blogs, content.news, content.twitter)), readerControl=list(language=text.language))
-#corpus <- tm_map(corpus, function(x) iconv(x, to='UTF-8', sub='byte'))
-corpus <- tm_map(corpus, tolower)
-#corpus <- tm_map(corpus, removeWords, stopwords(text.language))
-corpus <- tm_map(corpus, remove.punctuation)
-corpus <- tm_map(corpus, stripWhitespace)
-corpus <- tm_map(corpus, PlainTextDocument)
+get.file.size <- function(file.path) {
+  info <- file.info(file.path)
+  return(info$size)
+}
 
-# corpus.stemmed <- tm_map(corpus, stemDocument)
+get.file.sizes <- function(file.list) {
+  sizes <- lapply(file.list, FUN=get.file.size)
+  names(sizes) <- names(file.list)
+  result <- gather(data.frame(sizes), key="file", value="size")
+  return(result)
+}
 
-dtm <- DocumentTermMatrix(corpus, control=list(wordLengths=c(3,25)))
-# dtm.st <- DocumentTermMatrix(corpus.stemmed)
+get.row.stats <- function(row, categories=c("[[:alpha:]]", "[[:blank:]]", "[[:digit:]]", "[[:punct:]]")) {
+  cat.counts <- lapply(categories, function (pattern) sum(grepl(pattern, row$content)))
+  result <- data.frame(cat.counts)
+  return(results)
+}
 
+get.pattern.stats <- function(data, categories=c("[[:alpha:]]", "[[:space:]]", "[[:digit:]]", "[[:punct:]]"), categories.names=c("alphanumeric", "space", "digit", "punctuation")) {
+  contents <- data$content
+  get.category.counts <- function(pattern) sapply(contents, function (c) sum(gregexpr(pattern, c)[[1]] > 0), USE.NAMES=FALSE)
+  categories.counts <- lapply(categories, FUN=get.category.counts)
+  names(categories.counts) <- categories.names
+  counts <- data.frame(categories.counts)
+  counts$nchar <- nchar(contents)
+  #counts$file <- data$file
+  line.counts <- data.frame(table(data$file))
+  names(line.counts) <- c("file", "lines")
+  aggregated.counts = aggregate(counts, by=list(file=data$file), FUN=sum)
+  result <- merge(aggregated.counts, line.counts)
+  selector.cols.numeric <- !grepl("file", names(result))
+  total.stats <- data.frame(lapply(result[, selector.cols.numeric], sum))
+  total.stats$file = "ALL"
+  result <- rbind(result, total.stats)
+  result[, categories.names] = result[, categories.names] / result$nchar
+  result$other <- 1.0 - apply(result[, categories.names], 1, sum)
+  return(result)
+}
 
-# Create cloud of words
-dtm2 <- removeSparseTerms(dtm, 0.4)
-
-freq <- sort(colSums(as.matrix(dtm)), decreasing=TRUE)
-words <- names(freq)
-wordcloud(words[1:100], freq[1:100])
-
-dtm.bigrams <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
-freq.bigrams <- sort(colSums(as.matrix(dtm.bigrams)), decreasing=TRUE)
-bigrams <- names(freq.bigrams)
-wordcloud(bigrams[1:50], freq.bigrams[1:50])
-
-
-dtm.trigrams <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
-freq.trigrams <- sort(colSums(as.matrix(dtm.trigrams)), decreasing=TRUE)
-trigrams <- names(freq.trigrams)
-wordcloud(trigrams[1:30], freq.trigrams[1:30])
+create.corpus <- function(contents, language="en") {
+  corpus <- Corpus(VectorSource(contents), readerControl=list(language=language))
+  #corpus <- tm_map(corpus, function(x) iconv(x, to='UTF-8', sub='byte'))
+  corpus <- tm_map(corpus, tolower)
+  #corpus <- tm_map(corpus, removeWords, stopwords(text.language))
+  corpus <- tm_map(corpus, remove.punctuation)
+  corpus <- tm_map(corpus, stripWhitespace)
+  corpus <- tm_map(corpus, PlainTextDocument)
+  return(corpus)
+}

@@ -8,6 +8,8 @@ output: html_document
 ```{r, echo=FALSE}
 library(knitr)
 library(ggplot2)
+source("config.vars.R")
+source("explore.R")
 ```
 
 # Introduction
@@ -26,6 +28,51 @@ The documents were loaded into R using the *readLines* function with a "unknown"
 
 
 ```{r, echo=FALSE}
-unicode.fixes <- data.frame("Bad Unicode sequences"=c('â€¦', 'â€“', 'â€”', 'â€™', 'â€œ', 'â€[[:cntrl:]]'), "Replacement"= c('…', '–', '–', '’', '“', '”'))
-kable(unicode.fixes)
+#unicode.fixes <- data.frame("Bad Unicode sequences"=c('Ã¢â¬Â¦', 'Ã¢â¬â', 'Ã¢â¬â', 'Ã¢â¬â¢', 'Ã¢â¬Å', 'Ã¢â¬[[:cntrl:]]'), "Replacement"= c('â¦', 'â', 'â', 'â', 'â', 'â'))
+#kable(unicode.fixes)
+```
+
+# Exploratory analysys
+
+## File character composition
+
+```{r, echo=FALSE}
+data.raw <- load.corpus.content(data.dir, max.lines=line.limit, encoding=text.encoding)
+file.composition <- get.pattern.stats(data.raw)
+kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
+```
+
+
+```{r, echo=FALSE}
+if (FALSE) {
+contents <- fix.unicode(data.raw$contents)
+corpus <- create.corpus(contents)
+
+dtm <- DocumentTermMatrix(corpus, control=list(wordLengths=c(3,25)))
+# dtm.st <- DocumentTermMatrix(corpus.stemmed)
+
+
+# Create cloud of words
+dtm2 <- removeSparseTerms(dtm, 0.4)
+
+freq <- sort(colSums(as.matrix(dtm)), decreasing=TRUE)
+words <- names(freq)
+wordcloud(words[1:100], freq[1:100])
+
+dtm.bigrams <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
+freq.bigrams <- sort(colSums(as.matrix(dtm.bigrams)), decreasing=TRUE)
+bigrams <- names(freq.bigrams)
+wordcloud(bigrams[1:50], freq.bigrams[1:50])
+
+
+dtm.trigrams <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
+freq.trigrams <- sort(colSums(as.matrix(dtm.trigrams)), decreasing=TRUE)
+trigrams <- names(freq.trigrams)
+wordcloud(trigrams[1:30], freq.trigrams[1:30])
+}
+```
+
+
+
+```{r, echo=FALSE}
 ```
