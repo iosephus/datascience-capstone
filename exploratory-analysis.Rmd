@@ -55,18 +55,16 @@ dtm.1.nsw <- DocumentTermMatrix(corpus, control=list(wordLengths=c(min.word.len,
 ngram.1.freq <- get.ngram.freq(dtm.1)
 ngram.1.freq.nsw <- get.ngram.freq(dtm.1.nsw)
 
-ggplot(data=ngram.1.freq[1:10,], aes(x=ngram, y=freq)) + geom_bar(stat='identity') + coord_flip()
+ggplot(data=ngram.1.freq[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
+ggplot(data=ngram.1.freq.nsw[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
 
 dtm.2 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
-freq.2 <- sort(colSums(as.matrix(dtm.2)), decreasing=TRUE)
-ngrams.2 <- names(freq.2)
-wordcloud(ngrams.2[1:50], freq.2[1:50])
-
+ngram.2.freq <- get.ngram.freq(dtm.2)
+ggplot(data=ngram.2.freq[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
 
 dtm.3 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
-freq.3 <- sort(colSums(as.matrix(dtm.3)), decreasing=TRUE)
-ngrams.3 <- names(freq.3)
-wordcloud(ngrams.3[1:30], freq.3[1:30])
+ngram.3.freq <- get.ngram.freq(dtm.3)
+ggplot(data=ngram.3.freq[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
 ```
 
 
