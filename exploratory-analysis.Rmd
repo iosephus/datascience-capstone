@@ -14,7 +14,7 @@ source("explore.R")
 
 # Introduction
 
-This report contains an exploratory analysis of the dataset provided for the capstone project of the JHU Data Science Coursera Specialization. The dataset is a text corpus containing document in English, German, Russian and Finish. We analyze in this report the three American English portion of the corpus which is contained in the three plain text files:
+This report contains an exploratory analysis of the dataset provided for the capstone project of the JHU Data Science Coursera Specialization. The dataset is a text corpus containing documents in English, German, Russian and Finish. We analyze in this report the American English portion of the corpus which is contained in the three plain text files:
 
 * en_US.blogs.txt
 * en_US.news.txt
@@ -39,37 +39,34 @@ The documents were loaded into R using the *readLines* function with a "unknown"
 ```{r, echo=FALSE}
 data.raw <- load.corpus.content(data.dir, max.lines=line.limit, encoding=text.encoding)
 file.composition <- get.pattern.stats(data.raw)
-kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
+filekable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
 ```
 
+# Word frequency
 
 ```{r, echo=FALSE}
-if (FALSE) {
-contents <- fix.unicode(data.raw$contents)
-corpus <- create.corpus(contents)
+content <- fix.unicode(do.call(paste, as.list(data.raw$content)))
+corpus <- create.corpus(content)
 
-dtm <- DocumentTermMatrix(corpus, control=list(wordLengths=c(3,25)))
-# dtm.st <- DocumentTermMatrix(corpus.stemmed)
-
+dtm.1 <- DocumentTermMatrix(corpus, control=list(wordLengths=c(min.word.len, max.word.len)))
+dtm.1.nsw <- DocumentTermMatrix(corpus, control=list(wordLengths=c(min.word.len, max.word.len), stopwords=TRUE))
 
 # Create cloud of words
-dtm2 <- removeSparseTerms(dtm, 0.4)
+ngram.1.freq <- get.ngram.freq(dtm.1)
+ngram.1.freq.nsw <- get.ngram.freq(dtm.1.nsw)
 
-freq <- sort(colSums(as.matrix(dtm)), decreasing=TRUE)
-words <- names(freq)
-wordcloud(words[1:100], freq[1:100])
+ggplot(data=ngram.1.freq[1:10,], aes(x=ngram, y=freq)) + geom_bar(stat='identity') + coord_flip()
 
-dtm.bigrams <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
-freq.bigrams <- sort(colSums(as.matrix(dtm.bigrams)), decreasing=TRUE)
-bigrams <- names(freq.bigrams)
-wordcloud(bigrams[1:50], freq.bigrams[1:50])
+dtm.2 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
+freq.2 <- sort(colSums(as.matrix(dtm.2)), decreasing=TRUE)
+ngrams.2 <- names(freq.2)
+wordcloud(ngrams.2[1:50], freq.2[1:50])
 
 
-dtm.trigrams <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
-freq.trigrams <- sort(colSums(as.matrix(dtm.trigrams)), decreasing=TRUE)
-trigrams <- names(freq.trigrams)
-wordcloud(trigrams[1:30], freq.trigrams[1:30])
-}
+dtm.3 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
+freq.3 <- sort(colSums(as.matrix(dtm.3)), decreasing=TRUE)
+ngrams.3 <- names(freq.3)
+wordcloud(ngrams.3[1:30], freq.3[1:30])
 ```
 
 

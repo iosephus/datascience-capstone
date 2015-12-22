@@ -3,16 +3,17 @@ library(tidyr)
 library(tm)
 library(SnowballC)
 library(wordcloud)
+library(RWeka)
 
 fix.unicode <- function(text.data) {
-  result <- text.data
-  result <- gsub('â€¦', '…', result)
-  result <- gsub('â€“', '–', result)
-  result <- gsub('â€”', '–', result)
-  result <- gsub('â€™', '’', result)
-  result <- gsub('â€œ', '“', result)
-  result <- gsub('â€[[:cntrl:]]', '”', result)
-  return(result)
+    result <- as.vector(text.data)
+    result <- gsub('â€¦', '…', result)
+    result <- gsub('â€“', '–', result)
+    result <- gsub('â€”', '–', result)
+    result <- gsub('â€™', '’', result)
+    result <- gsub('â€œ', '“', result)
+    result <- gsub('â€[[:cntrl:]]', '”', result)
+    return(result)
 }
 
 remove.punctuation <- function(x) {
@@ -24,7 +25,7 @@ remove.punctuation <- function(x) {
 }
 
 NGramTokenizerFuncBuilder <- function(n) {
-  f <- function(x) NGramTokenizer(x, Weka_control(min = n, max = n, delimiters = delimiters))
+  f <- function(x) NGramTokenizer(x, Weka_control(min = n, max = n))
   return(f)
 }
 
@@ -100,3 +101,14 @@ create.corpus <- function(contents, language="en") {
   corpus <- tm_map(corpus, PlainTextDocument)
   return(corpus)
 }
+
+get.ngram.freq <- function(dtm) {
+    freq <- colSums(as.matrix(dtm))
+    ngrams <- names(freq)
+    result <- data.frame(ngram=ngrams, freq=freq)
+    rownames(result) <- NULL
+    result <- result[order(result$freq, decreasing=TRUE), ]
+    return(result)
+}
+
+
