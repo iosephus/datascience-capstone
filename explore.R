@@ -34,7 +34,6 @@ NGramTokenizerFuncBuilder <- function(n) {
   return(f)
 }
 
-
 get.file.list <- function(dir.path, pattern="*.txt") {
   files <- sapply(list.files(dir.path, pattern="*.txt"), FUN=function(fname) file.path(dir.path, fname))
   return(files)
