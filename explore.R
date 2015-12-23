@@ -4,7 +4,10 @@ library(tidyr)
 library(tm)
 library(SnowballC)
 library(wordcloud)
+options( java.parameters = "-Xmx12g" )
 library(RWeka)
+
+num.cores = detectCores(all.tests = FALSE, logical = FALSE)
 
 fix.unicode <- function(text.data) {
     result <- text.data
@@ -37,9 +40,15 @@ get.file.list <- function(dir.path, pattern="*.txt") {
   return(files)
 }
 
-load.corpus.file <- function(path, max.lines=-1, encoding="UTF-8") {
+load.corpus.file <- function(path, max.lines=-1, encoding="UTF-8", line.factor=1.0, seed=NULL) {
   con <- file(path, "rb")
   lines <- readLines(con, n = max.lines, encoding=encoding, skipNul=TRUE)
+  if (line.factor < 1.0) {
+     if (!is.null(seed)) {
+         set.seed(seed)
+     }
+    lines <- sample(lines, round(line.factor * length(lines)), replace=FALSE)
+  }
   close(con)
   result <- data.frame(line=seq(1, length(lines)))
   result$content <- lines
@@ -47,9 +56,9 @@ load.corpus.file <- function(path, max.lines=-1, encoding="UTF-8") {
   return(result)
 }
 
-load.corpus.content <- function(dir.path, max.lines=-1, encoding='unknown') {
+load.corpus.content <- function(dir.path, max.lines=-1, encoding='unknown', line.factor=1.0, seed=NULL) {
   files <- get.file.list(dir.path, pattern="*.txt")
-  contents <- mclapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding))
+  contents <- mclapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding, line.factor, seed), mc.cores=num.cores)
   result <- do.call(rbind, contents)
   rownames(result) <- NULL
   result$file = as.factor(result$file)
@@ -68,16 +77,10 @@ get.file.sizes <- function(file.list) {
   return(result)
 }
 
-get.row.stats <- function(row, categories=c("[[:alpha:]]", "[[:blank:]]", "[[:digit:]]", "[[:punct:]]")) {
-  cat.counts <- lapply(categories, function (pattern) sum(grepl(pattern, row$content)))
-  result <- data.frame(cat.counts)
-  return(results)
-}
-
 get.pattern.stats <- function(data, categories=c("[[:alpha:]]", "[[:space:]]", "[[:digit:]]", "[[:punct:]]"), categories.names=c("alphanumeric", "space", "digit", "punctuation")) {
   contents <- data$content
   get.category.counts <- function(pattern) sapply(contents, function (c) sum(gregexpr(pattern, c)[[1]] > 0), USE.NAMES=FALSE)
-  categories.counts <- lapply(categories, FUN=get.category.counts)
+  categories.counts <- mclapply(categories, FUN=get.category.counts, mc.cores=num.cores)
   names(categories.counts) <- categories.names
   counts <- data.frame(categories.counts)
   counts$nchar <- nchar(contents)
@@ -97,12 +100,12 @@ get.pattern.stats <- function(data, categories=c("[[:alpha:]]", "[[:space:]]", "
 
 create.corpus <- function(contents, language="en", remove.stopwords=FALSE) {
   corpus <- Corpus(VectorSource(contents), readerControl=list(language=language))
-  #corpus <- tm_map(corpus, function(x) iconv(x, to='UTF-8', sub='byte'))
   corpus <- tm_map(corpus, content_transformer(tolower))
   if (remove.stopwords) {
     corpus <- tm_map(corpus, removeWords, stopwords(language))
   }
   corpus <- tm_map(corpus, remove.punctuation)
+  corpus <- tm_map(corpus, removeNumbers)
   corpus <- tm_map(corpus, stripWhitespace)
   corpus <- tm_map(corpus, PlainTextDocument)
   return(corpus)
@@ -118,7 +121,7 @@ get.ngram.freq <- function(dtm) {
     freq.sum = sum(freq)
     result <- data.frame(freq=freq / freq.sum)
     result$ngram <- as.character(names(freq))
-    result$stopwords <- as.vector(sapply(result$ngram, FUN=count.stopwords))
+    result$stopwords <- as.vector(mcmapply(result$ngram, FUN=count.stopwords, mc.cores=num.cores))
     rownames(result) <- NULL
     result <- result[order(result$freq, decreasing=TRUE), ]
     return(result)

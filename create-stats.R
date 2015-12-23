@@ -2,24 +2,49 @@
 source("config.vars.R")
 source("explore.R")
 
-
-data.raw <- load.corpus.content(corpus.dir, max.lines=line.limit, encoding=text.encoding)
+print("Loading raw corpus data")
+data.raw <- load.corpus.content(corpus.dir, max.lines=line.limit, encoding=text.encoding, line.factor=line.factor, seed=605252240)
+print("Analyzing file composition")
 file.composition <- get.pattern.stats(data.raw)
+print("Saving file composition")
 saveRDS(file.composition, file.path(data.dir, "file.composition.rds"))
 
+print("Joining corpus content and fixing unicode problems")
 content <- fix.unicode(do.call(paste, as.list(data.raw$content)))
+rm(data.raw)
+print("Creating tm corpus")
 corpus <- create.corpus(content)
+rm(content)
+print("Saving tm corpus")
+saveRDS(corpus, file.path(data.dir, "corpus.rds"))
+#print("Loading tm corpus")
+#corpus <- readRDS(file.path(data.dir, "corpus.rds"))
 
+print("Creating 1-gram document term matrix")
 dtm.1 <- DocumentTermMatrix(corpus, control=list(wordLengths=c(min.word.len, max.word.len)))
+print("Creating 1-gram frequency data")
 ngram.1.freq <- get.ngram.freq(dtm.1)
+rm(dtm.1)
+print("Saving 1-gram frequency data")
 saveRDS(ngram.1.freq, file.path(data.dir, "ngram.1.freq.rds"))
+rm(ngram.1.freq)
 
+print("Creating 2-gram document term matrix")
 dtm.2 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
+print("Creating 2-gram frequency data")
 ngram.2.freq <- get.ngram.freq(dtm.2)
-
+rm(dtm.2)
+print("Saving 2-gram frequency data")
 saveRDS(ngram.1.freq, file.path(data.dir, "ngram.2.freq.rds"))
+rm(ngram.2.freq)
 
+print("Creating 3-gram document term matrix")
 dtm.3 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
+print("Creating 3-gram frequency data")
 ngram.3.freq <- get.ngram.freq(dtm.3)
-
+rm(dtm.3)
+print("Saving 3-gram frequency data")
 saveRDS(ngram.3.freq, file.path(data.dir, "ngram.3.freq.rds"))
+rm(ngram.3.freq)
+
+print("Done. Bye!")
