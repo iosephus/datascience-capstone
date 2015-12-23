@@ -1,4 +1,5 @@
 
+library(parallel)
 library(tidyr)
 library(tm)
 library(SnowballC)
@@ -6,13 +7,14 @@ library(wordcloud)
 library(RWeka)
 
 fix.unicode <- function(text.data) {
-    result <- as.vector(text.data)
-    result <- gsub('â€¦', '…', result)
-    result <- gsub('â€“', '–', result)
-    result <- gsub('â€”', '–', result)
-    result <- gsub('â€™', '’', result)
-    result <- gsub('â€œ', '“', result)
-    result <- gsub('â€[[:cntrl:]]', '”', result)
+    result <- text.data
+    #result <- gsub('â€¦', '…', result)
+    #result <- gsub('â€“', '–', result)
+    #result <- gsub('â€”', '–', result)
+    #result <- gsub('â€™', '’', result)
+    #result <- gsub('â€œ', '“', result)
+    #result <- gsub('â€', '”', result)
+    result <- iconv(result, "latin1", "ASCII", sub="")
     return(result)
 }
 
@@ -31,21 +33,23 @@ NGramTokenizerFuncBuilder <- function(n) {
 
 
 get.file.list <- function(dir.path, pattern="*.txt") {
-  files <- sapply(list.files(data.dir, pattern="*.txt"), FUN=function(fname) file.path(dir.path, fname))
+  files <- sapply(list.files(dir.path, pattern="*.txt"), FUN=function(fname) file.path(dir.path, fname))
   return(files)
 }
 
 load.corpus.file <- function(path, max.lines=-1, encoding="UTF-8") {
-  lines <- readLines(path, n = max.lines, encoding=encoding)
-  result <- data.frame(line=seq(1, length(lines)), content=lines)
+  con <- file(path, "rb")
+  lines <- readLines(con, n = max.lines, encoding=encoding, skipNul=TRUE)
+  close(con)
+  result <- data.frame(line=seq(1, length(lines)))
+  result$content <- lines
   result$file <- basename(path)
-  result$content <- as.character(result$content)
   return(result)
 }
 
 load.corpus.content <- function(dir.path, max.lines=-1, encoding='unknown') {
   files <- get.file.list(dir.path, pattern="*.txt")
-  contents <- lapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding))
+  contents <- mclapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding))
   result <- do.call(rbind, contents)
   rownames(result) <- NULL
   result$file = as.factor(result$file)
@@ -91,24 +95,37 @@ get.pattern.stats <- function(data, categories=c("[[:alpha:]]", "[[:space:]]", "
   return(result)
 }
 
-create.corpus <- function(contents, language="en") {
+create.corpus <- function(contents, language="en", remove.stopwords=FALSE) {
   corpus <- Corpus(VectorSource(contents), readerControl=list(language=language))
   #corpus <- tm_map(corpus, function(x) iconv(x, to='UTF-8', sub='byte'))
-  corpus <- tm_map(corpus, tolower)
-  #corpus <- tm_map(corpus, removeWords, stopwords(text.language))
+  corpus <- tm_map(corpus, content_transformer(tolower))
+  if (remove.stopwords) {
+    corpus <- tm_map(corpus, removeWords, stopwords(language))
+  }
   corpus <- tm_map(corpus, remove.punctuation)
   corpus <- tm_map(corpus, stripWhitespace)
   corpus <- tm_map(corpus, PlainTextDocument)
   return(corpus)
 }
 
+count.stopwords <- function(ngram, words=stopwords("en")) {
+    result <- sum(strsplit(ngram, " ")[[1]] %in% words)
+    return(result)
+}
+
 get.ngram.freq <- function(dtm) {
     freq <- colSums(as.matrix(dtm))
-    ngrams <- names(freq)
-    result <- data.frame(ngram=ngrams, freq=freq)
+    freq.sum = sum(freq)
+    result <- data.frame(freq=freq / freq.sum)
+    result$ngram <- as.character(names(freq))
+    result$stopwords <- as.vector(sapply(result$ngram, FUN=count.stopwords))
     rownames(result) <- NULL
     result <- result[order(result$freq, decreasing=TRUE), ]
     return(result)
 }
 
+ggplotColours <- function(n=6, h=c(0, 360) +15){
+    if ((diff(h)%%360) < 1) h[2] <- h[2] - 360/n
+    hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
+}
 

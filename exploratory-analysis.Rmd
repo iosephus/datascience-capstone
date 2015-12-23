@@ -8,6 +8,7 @@ output: html_document
 ```{r, echo=FALSE}
 library(knitr)
 library(ggplot2)
+require(gridExtra)
 source("config.vars.R")
 source("explore.R")
 ```
@@ -37,34 +38,58 @@ The documents were loaded into R using the *readLines* function with a "unknown"
 ## File character composition
 
 ```{r, echo=FALSE}
-data.raw <- load.corpus.content(data.dir, max.lines=line.limit, encoding=text.encoding)
+data.raw <- load.corpus.content(corpus.dir, max.lines=line.limit, encoding=text.encoding)
 file.composition <- get.pattern.stats(data.raw)
-filekable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
+kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
 ```
 
-# Word frequency
+# N-Gram statistics
+
+## Unigrams (words)
 
 ```{r, echo=FALSE}
 content <- fix.unicode(do.call(paste, as.list(data.raw$content)))
 corpus <- create.corpus(content)
 
 dtm.1 <- DocumentTermMatrix(corpus, control=list(wordLengths=c(min.word.len, max.word.len)))
-dtm.1.nsw <- DocumentTermMatrix(corpus, control=list(wordLengths=c(min.word.len, max.word.len), stopwords=TRUE))
-
-# Create cloud of words
 ngram.1.freq <- get.ngram.freq(dtm.1)
-ngram.1.freq.nsw <- get.ngram.freq(dtm.1.nsw)
-
-ggplot(data=ngram.1.freq[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
-ggplot(data=ngram.1.freq.nsw[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
 
 dtm.2 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
 ngram.2.freq <- get.ngram.freq(dtm.2)
-ggplot(data=ngram.2.freq[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
 
 dtm.3 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
 ngram.3.freq <- get.ngram.freq(dtm.3)
-ggplot(data=ngram.3.freq[1:25,], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity') + coord_flip()
+```
+
+In summary:
+
+* The corpus contains `r nrow(ngram.1.freq)` unigrams (words)
+* `r 100 * sum(ngram.1.freq$freq[ngram.1.freq$stopwords > 0])` percent of the occurrences are stop words.
+* The `r sum(cumsum(ngram.1.freq$freq) < 0.5)` most frequent words account for approximately fifty percent of the word occurrences.
+* The `r sum(cumsum(ngram.1.freq$freq) < 0.9)` most frequent words account for approximately ninety percent of the word occurrences.
+
+```{r, echo=FALSE}
+plot.num.words = 25
+plot.colors = ggplotColours(2)
+plot.sw0 <- ggplot(data=subset(ngram.1.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Probability", x="1-gram") + coord_flip() + ggtitle("Without stop words")
+plot.sw1 <- ggplot(data=subset(ngram.1.freq, stopwords>0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Probability", x="1-gram") + coord_flip() + ggtitle("With stop words")
+grid.arrange(plot.sw1, plot.sw0, ncol=2)
+```
+
+## Bigrams
+
+```{r, echo=FALSE}
+plot.sw0 <- ggplot(data=subset(ngram.2.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Probability", x="2-gram") + coord_flip() + ggtitle("Without stop words")
+plot.sw1 <- ggplot(data=subset(ngram.2.freq, stopwords>0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Probability", x="2-gram") + coord_flip() + ggtitle("With stop words")
+grid.arrange(plot.sw1, plot.sw0, ncol=2)
+```
+
+## Trigrams
+
+```{r, echo=FALSE}
+plot.sw0 <- ggplot(data=subset(ngram.3.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Probability", x="3-gram") + coord_flip() + ggtitle("Without stop words")
+plot.sw1 <- ggplot(data=subset(ngram.3.freq, stopwords>0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Probability", x="3-gram") + coord_flip() + ggtitle("With stop words")
+grid.arrange(plot.sw1, plot.sw0, ncol=2)
 ```
 
 
