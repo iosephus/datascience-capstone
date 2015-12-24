@@ -7,6 +7,7 @@ output: html_document
 
 ```{r, echo=FALSE}
 library(knitr)
+library(data.table)
 library(ggplot2)
 require(gridExtra)
 source("config.vars.R")
@@ -38,9 +39,9 @@ The documents were loaded into R using the *readLines* function with a "unknown"
 ## File character composition
 
 ```{r, echo=FALSE}
-data.raw <- load.corpus.content(corpus.dir, max.lines=line.limit, encoding=text.encoding)
-file.composition <- get.pattern.stats(data.raw)
-kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
+#data.raw <- load.corpus.content(corpus.dir, max.lines=line.limit, encoding=text.encoding)
+#file.composition <- get.pattern.stats(data.raw)
+#kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
 ```
 
 # N-Gram statistics
@@ -48,17 +49,12 @@ kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuatio
 ## Unigrams (words)
 
 ```{r, echo=FALSE}
-content <- fix.unicode(do.call(paste, as.list(data.raw$content)))
-corpus <- create.corpus(content)
-
-dtm.1 <- DocumentTermMatrix(corpus, control=list(wordLengths=c(min.word.len, max.word.len)))
-ngram.1.freq <- get.ngram.freq(dtm.1)
-
-dtm.2 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(2)))
-ngram.2.freq <- get.ngram.freq(dtm.2)
-
-dtm.3 <- DocumentTermMatrix(corpus, control = list(tokenize = NGramTokenizerFuncBuilder(3)))
-ngram.3.freq <- get.ngram.freq(dtm.3)
+ngram.1.freq <- as.data.frame(fread(file.path(data.dir, "fdist_ngrams_1.csv")))
+ngram.1.freq <- ngram.1.freq[order(ngram.1.freq$freq, decreasing=TRUE), ]
+ngram.2.freq <- as.data.frame(fread(file.path(data.dir, "fdist_ngrams_2.csv")))
+ngram.2.freq <- ngram.2.freq[order(ngram.2.freq$freq, decreasing=TRUE), ]
+ngram.3.freq <- as.data.frame(fread(file.path(data.dir, "fdist_ngrams_3.csv")))
+ngram.3.freq <- ngram.3.freq[order(ngram.3.freq$freq, decreasing=TRUE), ]
 ```
 
 In summary:
@@ -71,7 +67,7 @@ In summary:
 ```{r, echo=FALSE}
 plot.num.words = 25
 plot.colors = ggplotColours(2)
-plot.sw0 <- ggplot(data=subset(ngram.1.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Probability", x="1-gram") + coord_flip() + ggtitle("Without stop words")
+plot.sw0 <- ggplot(data=subset(ngram.1.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="1-gram") + coord_flip() + ggtitle("Without stop words")
 plot.sw1 <- ggplot(data=subset(ngram.1.freq, stopwords>0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Probability", x="1-gram") + coord_flip() + ggtitle("With stop words")
 grid.arrange(plot.sw1, plot.sw0, ncol=2)
 ```

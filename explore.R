@@ -57,7 +57,8 @@ load.corpus.file <- function(path, max.lines=-1, encoding="UTF-8", line.factor=1
 
 load.corpus.content <- function(dir.path, max.lines=-1, encoding='unknown', line.factor=1.0, seed=NULL) {
   files <- get.file.list(dir.path, pattern="*.txt")
-  contents <- mclapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding, line.factor, seed), mc.cores=num.cores)
+  #contents <- mclapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding, line.factor, seed), mc.cores=num.cores)
+  contents <- lapply(files, FUN=function(path) load.corpus.file(path, max.lines, encoding, line.factor, seed))
   result <- do.call(rbind, contents)
   rownames(result) <- NULL
   result$file = as.factor(result$file)
@@ -79,7 +80,8 @@ get.file.sizes <- function(file.list) {
 get.pattern.stats <- function(data, categories=c("[[:alpha:]]", "[[:space:]]", "[[:digit:]]", "[[:punct:]]"), categories.names=c("alphanumeric", "space", "digit", "punctuation")) {
   contents <- data$content
   get.category.counts <- function(pattern) sapply(contents, function (c) sum(gregexpr(pattern, c)[[1]] > 0), USE.NAMES=FALSE)
-  categories.counts <- mclapply(categories, FUN=get.category.counts, mc.cores=num.cores)
+  #categories.counts <- mclapply(categories, FUN=get.category.counts, mc.cores=num.cores)
+  categories.counts <- lapply(categories, FUN=get.category.counts)
   names(categories.counts) <- categories.names
   counts <- data.frame(categories.counts)
   counts$nchar <- nchar(contents)
@@ -120,7 +122,8 @@ get.ngram.freq <- function(dtm) {
     freq.sum = sum(freq)
     result <- data.frame(freq=freq / freq.sum)
     result$ngram <- as.character(names(freq))
-    result$stopwords <- as.vector(mcmapply(result$ngram, FUN=count.stopwords, mc.cores=num.cores))
+    #result$stopwords <- as.vector(mcmapply(result$ngram, FUN=count.stopwords, mc.cores=num.cores))
+    result$stopwords <- as.vector(mapply(result$ngram, FUN=count.stopwords))
     rownames(result) <- NULL
     result <- result[order(result$freq, decreasing=TRUE), ]
     return(result)
