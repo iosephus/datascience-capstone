@@ -5,7 +5,7 @@ date: "December 20, 2015"
 output: html_document
 ---
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=F, warning=F}
 library(knitr)
 library(data.table)
 library(ggplot2)
@@ -24,30 +24,20 @@ This report contains an exploratory analysis of the dataset provided for the cap
 
 The dataset was downloaded from a Coursera provided [link](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip) and according to the course documentation it was created from a corpus called HC Corpora. More info about how the original corpus was compiled can be found in the [About the Corpora](http://www.corpora.heliohost.org/aboutcorpus.html) section of the HC Corpora website. 
 
-# Data loading
-
-The documents were loaded into R using the *readLines* function with a "unknown" value for the text encoding. The document contained "bad unicode character sequences", typical from the document being processed at some point in its life with the wrong encoding. Those occurrences were fixed using the following substitutions:
-
-
-```{r, echo=FALSE}
-#unicode.fixes <- data.frame("Bad Unicode sequences"=c('Ã¢â¬Â¦', 'Ã¢â¬â', 'Ã¢â¬â', 'Ã¢â¬â¢', 'Ã¢â¬Å', 'Ã¢â¬[[:cntrl:]]'), "Replacement"= c('â¦', 'â', 'â', 'â', 'â', 'â'))
-#kable(unicode.fixes)
-```
-
 # Exploratory analysys
 
 ## File character composition
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=F, warning=F}
 file.composition <- as.data.frame(fread(file.path(data.dir, "corpus_composition.csv")))
-kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "chars")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
+kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "chars")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Number of characters"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class.")
 ```
 
 # N-Gram statistics
 
 ## Unigrams (words)
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=F, warning=F}
 ngram.1.freq <- as.data.frame(fread(file.path(data.dir, "fdist_ngrams_1.csv")))
 ngram.1.freq <- ngram.1.freq[order(ngram.1.freq$freq, decreasing=TRUE), ]
 ngram.2.freq <- as.data.frame(fread(file.path(data.dir, "fdist_ngrams_2.csv")))
