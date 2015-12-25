@@ -39,9 +39,8 @@ The documents were loaded into R using the *readLines* function with a "unknown"
 ## File character composition
 
 ```{r, echo=FALSE}
-#data.raw <- load.corpus.content(corpus.dir, max.lines=line.limit, encoding=text.encoding)
-#file.composition <- get.pattern.stats(data.raw)
-#kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "nchar", "lines")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters", "Number of lines"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
+file.composition <- as.data.frame(fread(file.path(data.dir, "corpus_composition.csv")))
+kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "other", "chars")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Other", "Number of characters"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. The column Other shows the fraction of characters that do not belong in any of the listed categories.")
 ```
 
 # N-Gram statistics
