@@ -35,9 +35,26 @@ kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuatio
 
 # N-Gram statistics
 
+After the corpus was loaded, it was cleaned and pre-processed using a Python script. R with the *tm* package was painfully slow when working with the whole corpus and a Python script using the NLTK library was used instead. The results were saved to a CSV file and loaded in R for creating this report. The cleaning consisted of the following steps:
+
+* Conversion to lowercase.
+* Replacement of space characters (Python regex: "[\n\t\r\f\v]") and dashes by spaces.
+* Quotes in word contractions (Python regex: "([a-z0-9])\'([a-z])") were removed.
+* Shortening more than three occurrences of same letter to three (Example: 'aaaaaaaaa' to 'aaa').
+* Removal of punctuation characters.
+* Removal of redundant spaces (Example: "  " to " ").
+
+After these cleaning steps tokenization was performed spliting the corpus content at spaces between words.
+
+A vocabulary was used to filter the occurrences of tokens that were not valid words. The vocabulary was created by the union of the "words" NLTK corpus and any term appearing in the training corpus at least 50 times. Including these more frequent term from the corpus allows to include words that are important to predict but do not make the list of words in the English language (places, people, foreign words frequently used in English, technical terms, abbreviations, etc.). Terms not appearing in this extended vocabulary were replaced by the token "<unk>" or "<num>" if they were numeric terms (including ordinals made of numbers and ending in "st", "nd", "rd" or "th").
+
+Once the tokenized corpus was filtered, a frequency analysis of 1-grams, 2-grams and 3-grams was performed. The plots below show the first 25 n-gram in each category. An extra plot was added in each case showing the most frequent n-grams without stop words, numeric (<num>) or unknown (<unk>) tokens.
+
+The distribution of frequencies (not shown here) was very asymmetric, with a small proportion of the words having a very large number of occurrences and a large proportion of words having very low counts.
+
 ## Unigrams (words)
 
-```{r, echo=FALSE, message=F, warning=F}
+```{r, echo=FALSE,  message=F, warning=F, results='hide'}
 ngram.1.freq <- as.data.frame(fread(file.path(data.dir, "fdist_ngrams_1.csv")))
 ngram.1.freq <- ngram.1.freq[order(ngram.1.freq$freq, decreasing=TRUE), ]
 ngram.2.freq <- as.data.frame(fread(file.path(data.dir, "fdist_ngrams_2.csv")))
@@ -48,36 +65,65 @@ ngram.3.freq <- ngram.3.freq[order(ngram.3.freq$freq, decreasing=TRUE), ]
 
 In summary:
 
-* The corpus contains `r nrow(ngram.1.freq)` unigrams (words)
-* `r 100 * sum(ngram.1.freq$freq[ngram.1.freq$stopwords > 0])` percent of the occurrences are stop words.
-* The `r sum(cumsum(ngram.1.freq$freq) < 0.5)` most frequent words account for approximately fifty percent of the word occurrences.
-* The `r sum(cumsum(ngram.1.freq$freq) < 0.9)` most frequent words account for approximately ninety percent of the word occurrences.
+* The corpus contains `r as.integer(nrow(ngram.1.freq))` unique words and the total number of word occurrences is `r as.integer(sum(ngram.1.freq$freq))`.
+* The most frequent word (`r ngram.1.freq$ngram[1]`) accounts for `r round(100 * ngram.1.freq$freq[1] / sum(ngram.1.freq$freq), 1)` percent of the occurrences.
+* The `r as.integer(sum(cumsum(ngram.1.freq$freq) < 0.5 * sum(ngram.1.freq$freq)) + 1)` most frequent words account for approximately 50% of the word occurrences.
+* The `r as.integer(sum(cumsum(ngram.1.freq$freq) < 0.9 * sum(ngram.1.freq$freq)) + 1)` most frequent words account for approximately 90% of the word occurrences.
+* `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$stopwords > 0]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are stop words.
+* `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$ngram == "<unk>"]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are out-of-vocabulary words (<unk>).
+* `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$ngram == "<num>"]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are numeric tokens (<num>).
+* Mean word frequency is `r round(mean(ngram.1.freq$freq), 1)` and the median is `r median(ngram.1.freq$freq)`. 
 
 ```{r, echo=FALSE}
 plot.num.words = 25
 plot.colors = ggplotColours(2)
-plot.sw0 <- ggplot(data=subset(ngram.1.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="1-gram") + coord_flip() + ggtitle("Without stop words")
-plot.sw1 <- ggplot(data=subset(ngram.1.freq, stopwords>0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Probability", x="1-gram") + coord_flip() + ggtitle("With stop words")
+plot.data = ngram.1.freq[ngram.1.freq$stopwords==0 & !grepl('<unk>|<num>', ngram.1.freq$ngram), ][1:plot.num.words, ]
+plot.sw0 <- ggplot(data=plot.data, aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="1-gram") + coord_flip() + ggtitle("No stopwords/<unk>/<num>")
+plot.sw1 <- ggplot(data=ngram.1.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="1-gram") + coord_flip() + ggtitle("All n-grams")
 grid.arrange(plot.sw1, plot.sw0, ncol=2)
 ```
 
 ## Bigrams
 
+In summary:
+
+* The corpus contains `r as.integer(nrow(ngram.2.freq))` unique 2-grams and the total number of 2-gram occurrences is `r as.integer(sum(ngram.2.freq$freq))`.
+* The most frequent 2-gram (`r ngram.2.freq$ngram[1]`) accounts for `r round(100 * ngram.2.freq$freq[1] / sum(ngram.2.freq$freq), 1)` percent of the occurrences.
+* The `r as.integer(sum(cumsum(ngram.2.freq$freq) < 0.5 * sum(ngram.2.freq$freq)) + 1)` most frequent 2-grams account for approximately 50% of the 2-gram occurrences.
+* The `r as.integer(sum(cumsum(ngram.2.freq$freq) < 0.9 * sum(ngram.2.freq$freq)) + 1)` most frequent 2-gram account for approximately 90% of the 2-gram occurrences.
+* `r round(100 * sum(ngram.2.freq$freq[ngram.2.freq$stopwords > 0]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain stop words.
+* `r round(100 * sum(ngram.2.freq$freq[grepl("<unk>", ngram.2.freq$ngram)]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain out-of-vocabulary words (<unk>).
+* `r round(100 * sum(ngram.2.freq$freq[grepl("<num>", ngram.2.freq$ngram)]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain numeric tokens (<num>).
+* Mean 2-gram frequency is `r round(mean(ngram.2.freq$freq), 1)` and the median is `r median(ngram.2.freq$freq)`. 
+
 ```{r, echo=FALSE}
-plot.sw0 <- ggplot(data=subset(ngram.2.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Probability", x="2-gram") + coord_flip() + ggtitle("Without stop words")
-plot.sw1 <- ggplot(data=subset(ngram.2.freq, stopwords>0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Probability", x="2-gram") + coord_flip() + ggtitle("With stop words")
+plot.data = ngram.2.freq[ngram.2.freq$stopwords==0 & !grepl('<unk>|<num>', ngram.2.freq$ngram), ][1:plot.num.words, ]
+plot.sw0 <- ggplot(data=plot.data, aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="2-gram") + coord_flip() + ggtitle("No stopwords/<unk>/<num>")
+plot.sw1 <- ggplot(data=ngram.2.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="2-gram") + coord_flip() + ggtitle("All n-grams")
 grid.arrange(plot.sw1, plot.sw0, ncol=2)
 ```
 
 ## Trigrams
 
+In summary:
+
+* The corpus contains `r as.integer(nrow(ngram.3.freq))` unique 3-grams and the total number of 3-gram occurrences is `r as.integer(sum(ngram.3.freq$freq))`.
+* The most frequent 3-gram (`r ngram.3.freq$ngram[1]`) accounts for `r round(100 * ngram.3.freq$freq[1] / sum(ngram.3.freq$freq), 1)` percent of the occurrences.
+* The `r as.integer(sum(cumsum(ngram.3.freq$freq) < 0.5 * sum(ngram.3.freq$freq)) + 1)` most frequent 3-grams account for approximately 50% of the 3-gram occurrences.
+* The `r as.integer(sum(cumsum(ngram.3.freq$freq) < 0.9 * sum(ngram.3.freq$freq)) + 1)` most frequent 3-gram account for approximately 90% of the 3-gram occurrences.
+* `r round(100 * sum(ngram.3.freq$freq[ngram.3.freq$stopwords > 0]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain stop words.
+* `r round(100 * sum(ngram.3.freq$freq[grepl("<unk>", ngram.3.freq$ngram)]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain out-of-vocabulary words ("<unk>").
+* `r round(100 * sum(ngram.3.freq$freq[grepl("<num>", ngram.3.freq$ngram)]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain numeric tokens ("<num>").
+* Mean 3-gram frequency is `r round(mean(ngram.3.freq$freq), 1)` and the median is `r median(ngram.3.freq$freq)`. 
+
 ```{r, echo=FALSE}
-plot.sw0 <- ggplot(data=subset(ngram.3.freq, stopwords==0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Probability", x="3-gram") + coord_flip() + ggtitle("Without stop words")
-plot.sw1 <- ggplot(data=subset(ngram.3.freq, stopwords>0)[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Probability", x="3-gram") + coord_flip() + ggtitle("With stop words")
+plot.data = ngram.3.freq[ngram.3.freq$stopwords==0 & !grepl('<unk>|<num>', ngram.3.freq$ngram), ][1:plot.num.words, ]
+plot.sw0 <- ggplot(data=plot.data, aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="3-gram") + coord_flip() + ggtitle("No stopwords/<unk>/<num>")
+plot.sw1 <- ggplot(data=ngram.3.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="3-gram") + coord_flip() + ggtitle("All n-grams")
 grid.arrange(plot.sw1, plot.sw0, ncol=2)
 ```
 
-
+# Plans for a prediction algorithm
 
 ```{r, echo=FALSE}
 ```
