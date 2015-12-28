@@ -1,7 +1,7 @@
 ---
 title: 'Data Science Capstone: Exploratory Analysis'
 author: "Jose M. Perez-Sanchez"
-date: "December 20, 2015"
+date: "December 28th, 2015"
 output: html_document
 ---
 
@@ -9,6 +9,7 @@ output: html_document
 library(knitr)
 library(data.table)
 library(ggplot2)
+library(scales)
 require(gridExtra)
 source("config.vars.R")
 source("explore.R")
@@ -26,31 +27,42 @@ The dataset was downloaded from a Coursera provided [link](https://d396qusza40or
 
 # Exploratory analysys
 
-## File character composition
+## Corpus composition
 
 ```{r, echo=FALSE, message=F, warning=F}
 file.composition <- as.data.frame(fread(file.path(data.dir, "corpus_composition.csv")))
-kable(file.composition[, c("file", "alphanumeric", "space", "digit", "punctuation", "chars")], digits=4, col.names=c("File", "Alphanumeric", "Space", "Digit", "Punctuation", "Number of characters"), caption="Character composition of the corpus files. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class.")
+file.composition = rbind(file.composition, c("Total", colSums(file.composition[,2:8])))
+file.composition$alphanumeric = as.numeric(file.composition$alphanumeric)
+file.composition$space = as.numeric(file.composition$space)
+file.composition$digit = as.numeric(file.composition$digit)
+file.composition$punctuation = as.numeric(file.composition$punctuation)
+file.composition$chars = as.numeric(file.composition$chars)
+file.composition[, c("alphanumeric", "space", "digit", "punctuation")] = file.composition[, c("alphanumeric", "space", "digit", "punctuation")] / file.composition[, c("chars")]
+kable(file.composition[, c("file", "newline", "words", "chars", "alphanumeric", "space", "digit", "punctuation")], digits=4, col.names=c("File", "Lines", "Words", "Characters", "Alphanumeric", "Space", "Digit", "Punctuation"), caption="Composition of the corpus files. The columns Lines, Words and Characters show counts. The columns Alphanumeric, Space, Digit and Punctuation show the fraction of characters in each class. Word counts are raw after cleaning and tokenizing, but without any vocabulary consideration")
 ```
+
+## Training and testing sets
+
+At this point the corpus will be split in a training and a testing set. Given the average line size observed it is reasonable to separate the file by randomly assigning lines to one of the two sets. The training set contains 80% of the lines and the remaining 20% was assigned to the testing set. All the exploratory analysis done from this point is done exclusively on the training set.
 
 # N-Gram statistics
 
-After the corpus was loaded, it was cleaned and pre-processed using a Python script. R with the *tm* package was painfully slow when working with the whole corpus and a Python script using the NLTK library was used instead. The results were saved to a CSV file and loaded in R for creating this report. The cleaning consisted of the following steps:
+After the corpus was loaded, it was cleaned and pre-processed. The cleaning consisted of the following steps:
 
 * Conversion to lowercase.
-* Replacement of space characters (Python regex: "[\n\t\r\f\v]") and dashes by spaces.
-* Quotes in word contractions (Python regex: "([a-z0-9])\'([a-z])") were removed.
+* Replacement of space characters ("[\\n\\t\\r\\f\\v]") and dashes by spaces.
+* Quotes in word contractions ("([a-z0-9])\'([a-z])") were removed.
 * Shortening more than three occurrences of same letter to three (Example: 'aaaaaaaaa' to 'aaa').
 * Removal of punctuation characters.
-* Removal of redundant spaces (Example: "  " to " ").
+* Replacement of occurrence of more than one consecutive space with single spaces.
 
 After these cleaning steps tokenization was performed spliting the corpus content at spaces between words.
 
-A vocabulary was used to filter the occurrences of tokens that were not valid words. The vocabulary was created by the union of the "words" NLTK corpus and any term appearing in the training corpus at least 50 times. Including these more frequent term from the corpus allows to include words that are important to predict but do not make the list of words in the English language (places, people, foreign words frequently used in English, technical terms, abbreviations, etc.). Terms not appearing in this extended vocabulary were replaced by the token "<unk>" or "<num>" if they were numeric terms (including ordinals made of numbers and ending in "st", "nd", "rd" or "th").
+A vocabulary was used to filter the occurrences of tokens that were not valid words. The vocabulary was created by the union of the "words" NLTK corpus and any term appearing in the training corpus at least 50 times. Including these more frequent term from the corpus allows to include words that are important to predict but do not make the list of words in the English language (places, people, foreign words frequently used in English, technical terms, abbreviations, etc.). Terms not appearing in this extended vocabulary were replaced by the token \<unk\>, or \<num>\ if they were numeric terms (including ordinals made of numbers and ending in "st", "nd", "rd" or "th").
 
-Once the tokenized corpus was filtered, a frequency analysis of 1-grams, 2-grams and 3-grams was performed. The plots below show the first 25 n-gram in each category. An extra plot was added in each case showing the most frequent n-grams without stop words, numeric (<num>) or unknown (<unk>) tokens.
+Once the tokenized corpus was filtered and \<unk\>/\<num\> terms replaced, a frequency analysis of 1-grams, 2-grams and 3-grams was performed. The plots below show the 20 most frequent n-gram in each category. Extra plots were added showing the most frequent n-grams without stop words or those without stop words, numeric (\<num\>) or unknown (\<unk\>) tokens. The NLTK list of stopwords for English was used for filtering.
 
-The distribution of frequencies (not shown here) was very asymmetric, with a small proportion of the words having a very large number of occurrences and a large proportion of words having very low counts.
+The distribution of frequencies (shown below) for words is very asymmetric, with a small proportion of the words having a very large number of occurrences and a large proportion of words having very low counts.
 
 ## Unigrams (words)
 
@@ -70,16 +82,22 @@ In summary:
 * The `r as.integer(sum(cumsum(ngram.1.freq$freq) < 0.5 * sum(ngram.1.freq$freq)) + 1)` most frequent words account for approximately 50% of the word occurrences.
 * The `r as.integer(sum(cumsum(ngram.1.freq$freq) < 0.9 * sum(ngram.1.freq$freq)) + 1)` most frequent words account for approximately 90% of the word occurrences.
 * `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$stopwords > 0]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are stop words.
-* `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$ngram == "<unk>"]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are out-of-vocabulary words (<unk>).
-* `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$ngram == "<num>"]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are numeric tokens (<num>).
+* `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$ngram == "<unk>"]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are out-of-vocabulary words (\<unk\>).
+* `r round(100 * sum(ngram.1.freq$freq[ngram.1.freq$ngram == "<num>"]) / sum(ngram.1.freq$freq), 1)` percent of the occurrences are numeric tokens (\<num\>).
 * Mean word frequency is `r round(mean(ngram.1.freq$freq), 1)` and the median is `r median(ngram.1.freq$freq)`. 
 
+```{r, echo=FALSE, message=F, warning=F}
+ggplot(data=ngram.1.freq, aes(x=freq)) + geom_histogram(aes(fill=..count..)) + scale_x_log10(breaks=c(1, 10, 100, 1000, 10000, 100000, 1000000), limits=c(1, 1000000)) + labs(y="Count", x="Frequency (log10 scale)") + ggtitle("Frequency distribution for 1-grams")
+```
+
+Most frequent 1-grams in two categories: All (left) and not containing stop words (right).
+
 ```{r, echo=FALSE}
-plot.num.words = 25
+plot.num.words = 20
 plot.colors = ggplotColours(2)
 plot.data = ngram.1.freq[ngram.1.freq$stopwords==0 & !grepl('<unk>|<num>', ngram.1.freq$ngram), ][1:plot.num.words, ]
-plot.sw0 <- ggplot(data=plot.data, aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="1-gram") + coord_flip() + ggtitle("No stopwords/<unk>/<num>")
-plot.sw1 <- ggplot(data=ngram.1.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="1-gram") + coord_flip() + ggtitle("All n-grams")
+plot.sw0 <- ggplot(data=plot.data, aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="1-gram (No stop words)") + coord_flip()
+plot.sw1 <- ggplot(data=ngram.1.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="1-gram") + coord_flip()
 grid.arrange(plot.sw1, plot.sw0, ncol=2)
 ```
 
@@ -92,15 +110,23 @@ In summary:
 * The `r as.integer(sum(cumsum(ngram.2.freq$freq) < 0.5 * sum(ngram.2.freq$freq)) + 1)` most frequent 2-grams account for approximately 50% of the 2-gram occurrences.
 * The `r as.integer(sum(cumsum(ngram.2.freq$freq) < 0.9 * sum(ngram.2.freq$freq)) + 1)` most frequent 2-gram account for approximately 90% of the 2-gram occurrences.
 * `r round(100 * sum(ngram.2.freq$freq[ngram.2.freq$stopwords > 0]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain stop words.
-* `r round(100 * sum(ngram.2.freq$freq[grepl("<unk>", ngram.2.freq$ngram)]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain out-of-vocabulary words (<unk>).
-* `r round(100 * sum(ngram.2.freq$freq[grepl("<num>", ngram.2.freq$ngram)]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain numeric tokens (<num>).
+* `r round(100 * sum(ngram.2.freq$freq[grepl("<unk>", ngram.2.freq$ngram)]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain out-of-vocabulary words (\<unk\>).
+* `r round(100 * sum(ngram.2.freq$freq[grepl("<num>", ngram.2.freq$ngram)]) / sum(ngram.2.freq$freq), 1)` percent of the occurrences contain numeric tokens (\<num\>).
 * Mean 2-gram frequency is `r round(mean(ngram.2.freq$freq), 1)` and the median is `r median(ngram.2.freq$freq)`. 
 
+```{r, echo=FALSE, message=F, warning=F}
+ggplot(data=ngram.2.freq, aes(x=freq)) + geom_histogram(aes(fill=..count..)) + scale_x_log10(breaks=c(1, 10, 100, 1000 ), limits=c(1, 1500)) + labs(y="Count", x="Frequency (log10 scale)") + ggtitle("Frequency distribution for 2-grams")
+```
+
+Most frequent 2-grams in three categories: All (left); not containing stop words (center); and not containing stop words, unknown or numeric tokens (right).
+
 ```{r, echo=FALSE}
-plot.data = ngram.2.freq[ngram.2.freq$stopwords==0 & !grepl('<unk>|<num>', ngram.2.freq$ngram), ][1:plot.num.words, ]
-plot.sw0 <- ggplot(data=plot.data, aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="2-gram") + coord_flip() + ggtitle("No stopwords/<unk>/<num>")
-plot.sw1 <- ggplot(data=ngram.2.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="2-gram") + coord_flip() + ggtitle("All n-grams")
-grid.arrange(plot.sw1, plot.sw0, ncol=2)
+plot.all <- ggplot(data=ngram.2.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="2-gram") + coord_flip() + scale_y_continuous(breaks=pretty_breaks(n=3))
+plot.data = ngram.2.freq[ngram.2.freq$stopwords==0, ]
+plot.nosw <- ggplot(data=plot.data[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="2-gram (No stopwords)") + coord_flip()  + scale_y_continuous(breaks=pretty_breaks(n=2))
+plot.data = plot.data[!grepl('<unk>|<num>', plot.data$ngram), ]
+plot.noswunknum <- ggplot(data=plot.data[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="2-gram (No stopword, <unk> or <num>)") + coord_flip() + scale_y_continuous(breaks=pretty_breaks(n=2))
+grid.arrange(plot.all, plot.nosw, plot.noswunknum, ncol=3)
 ```
 
 ## Trigrams
@@ -108,22 +134,31 @@ grid.arrange(plot.sw1, plot.sw0, ncol=2)
 In summary:
 
 * The corpus contains `r as.integer(nrow(ngram.3.freq))` unique 3-grams and the total number of 3-gram occurrences is `r as.integer(sum(ngram.3.freq$freq))`.
-* The most frequent 3-gram (`r ngram.3.freq$ngram[1]`) accounts for `r round(100 * ngram.3.freq$freq[1] / sum(ngram.3.freq$freq), 1)` percent of the occurrences.
+* The most frequent 3-gram (`r gsub(">", "\\>", gsub("<", "\\<", ngram.3.freq$ngram[1]))`) accounts for `r round(1000 * ngram.3.freq$freq[1] / sum(ngram.3.freq$freq), 1)` per-thousand occurrences.
 * The `r as.integer(sum(cumsum(ngram.3.freq$freq) < 0.5 * sum(ngram.3.freq$freq)) + 1)` most frequent 3-grams account for approximately 50% of the 3-gram occurrences.
 * The `r as.integer(sum(cumsum(ngram.3.freq$freq) < 0.9 * sum(ngram.3.freq$freq)) + 1)` most frequent 3-gram account for approximately 90% of the 3-gram occurrences.
 * `r round(100 * sum(ngram.3.freq$freq[ngram.3.freq$stopwords > 0]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain stop words.
-* `r round(100 * sum(ngram.3.freq$freq[grepl("<unk>", ngram.3.freq$ngram)]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain out-of-vocabulary words ("<unk>").
-* `r round(100 * sum(ngram.3.freq$freq[grepl("<num>", ngram.3.freq$ngram)]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain numeric tokens ("<num>").
+* `r round(100 * sum(ngram.3.freq$freq[grepl("<unk>", ngram.3.freq$ngram)]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain out-of-vocabulary words (\<unk\>).
+* `r round(100 * sum(ngram.3.freq$freq[grepl("<num>", ngram.3.freq$ngram)]) / sum(ngram.3.freq$freq), 1)` percent of the occurrences contain numeric tokens (\<num\>).
 * Mean 3-gram frequency is `r round(mean(ngram.3.freq$freq), 1)` and the median is `r median(ngram.3.freq$freq)`. 
 
+```{r, echo=FALSE, message=F, warning=F}
+ggplot(data=ngram.3.freq, aes(x=freq)) + geom_histogram(aes(fill=..count..)) + scale_x_log10(breaks=c(1, 10, 100 ), limits=c(1, 600)) + labs(y="Count", x="Frequency (log10 scale)") + ggtitle("Frequency distribution for 3-grams")
+```
+
+Most frequent 3-grams in two categories: All (left) and not containing stop words, unknown or numeric tokens (right).
+
 ```{r, echo=FALSE}
-plot.data = ngram.3.freq[ngram.3.freq$stopwords==0 & !grepl('<unk>|<num>', ngram.3.freq$ngram), ][1:plot.num.words, ]
-plot.sw0 <- ggplot(data=plot.data, aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="3-gram") + coord_flip() + ggtitle("No stopwords/<unk>/<num>")
-plot.sw1 <- ggplot(data=ngram.3.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="3-gram") + coord_flip() + ggtitle("All n-grams")
-grid.arrange(plot.sw1, plot.sw0, ncol=2)
+plot.all <- ggplot(data=ngram.3.freq[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[1]) + labs(y="Frequency", x="3-gram") + coord_flip() + scale_y_continuous(breaks=pretty_breaks(n=2))
+plot.data = ngram.3.freq[ngram.3.freq$stopwords==0 & !grepl('<unk>|<num>', ngram.3.freq$ngram), ]
+plot.noswunknum <- ggplot(data=plot.data[1:plot.num.words, ], aes(x=reorder(ngram, freq), y=freq)) + geom_bar(stat='identity', fill=plot.colors[2]) + labs(y="Frequency", x="3-gram (No stopwords, <unk> or <num>)") + coord_flip() + scale_y_continuous(breaks=pretty_breaks(n=2))
+grid.arrange(plot.all, plot.noswunknum, ncol=2)
 ```
 
 # Plans for a prediction algorithm
+
+The prediction algorithm will be based on a combination of several n-gram models (n = 1, 2, 3) with a backoff smoothing. In a first version no sentence segmentation will be used, it might be introduced as an improvement once a first version is working.
+
 
 ```{r, echo=FALSE}
 ```
