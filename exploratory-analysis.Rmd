@@ -25,7 +25,7 @@ This report contains an exploratory analysis of the dataset provided for the cap
 
 The dataset was downloaded from a Coursera provided [link](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip) and according to the course documentation it was created from a corpus called HC Corpora. More info about how the original corpus was compiled can be found in the [About the Corpora](http://www.corpora.heliohost.org/aboutcorpus.html) section of the HC Corpora website. 
 
-# Exploratory analysys
+# Exploratory analysis
 
 ## Corpus composition
 

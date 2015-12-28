@@ -188,7 +188,7 @@ if __name__ == "__main__":
     print("Reading corpus")
     start_time = time.time()
     corpus_reader = nltk.corpus.PlaintextCorpusReader(data_dir, 'training_set\.txt', encoding=text_encoding)
-    corpus_text = corpus_reader.raw()[0:90000000]
+    corpus_text = corpus_reader.raw()
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     #print("Splitting lines")
