@@ -23,10 +23,10 @@ lang = "english"
 max_word_len = 24
 char_categories = {'alphanumeric': '[a-zA-Z]', 'space': r'[\s]', 'newline': r'\n', 'digit': '[0-9]', 'punctuation': re.escape(string.punctuation).join(['[', ']'])}
 reduction_factor = 1.0
-analyze_unigrams = True
-analyze_bigrams = True
-analyze_trigrams = True
-analyze_quadrigrams = False
+analyze_unigrams = False
+analyze_bigrams = False
+analyze_trigrams = False
+analyze_quadrigrams = True
 training_set_size = 0.8
 num_proc = 10
 vocabulary = set([w.lower() for w in words.words()])
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     del(tokens_unigrams_raw)
     del(fdist_unigrams_raw)
     del(unigrams_raw)
-    del(vocabulary_extended)
+    #del(vocabulary_extended)
     del(frequent_unigrams)
     print("Done. Took %f seconds" % (time.time() - start_time))
 
@@ -246,7 +246,7 @@ if __name__ == "__main__":
         fdist_unigrams_data.to_csv(os.path.join(data_dir, "fdist_ngrams_1.csv"), index = False)
         print("Done. Took %f seconds" % (time.time() - start_time))
         del(fdist_unigrams)
-        del(fdist_unigrams_data)
+        #del(fdist_unigrams_data)
 
     if analyze_bigrams:
         print("Computing bigram frequencies")
@@ -298,8 +298,9 @@ if __name__ == "__main__":
 
         print("Building quadrigram frequencies data frame (parallel)")
         start_time = time.time()
-        quadrigrams = functools.reduce(lambda l1, l2: l1 + l2, [get_ngrams(s, 4, pad=False) for s in tokens_unigrams])
-        fdist_trigrams = nltk.FreqDist(quadrigrams)
+        fdist_quadrigrams_data = create_freq_dataframe(fdist_quadrigrams)
+        #quadrigrams = functools.reduce(lambda l1, l2: l1 + l2, [get_ngrams(s, 4, pad=False) for s in tokens_unigrams])
+        #fdist_trigrams = nltk.FreqDist(quadrigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
 
         print("Saving trigram frequencies")
