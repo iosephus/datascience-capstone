@@ -1,12 +1,13 @@
 
 require(tools)
 source("config.vars.R")
+source("common.R")
 
 input.corpus.dir <- "C:\\Users\\JoseM\\Projects\\Capstone\\Corpus\\Coursera-SwiftKey\\final\\en_US"
 
 file.list = list.files(input.corpus.dir, "*.txt", full.names=TRUE)
 
-text.lines <- lapply(file.list, FUN=function(path) readLines(path, encoding=text.encoding, skipNul=TRUE))
+text.lines <- lapply(file.list, FUN=read.corpus.file)
 names(text.lines) <- as.vector(sapply(file.list, function (path) file_path_sans_ext(basename(path))))
 
 training.corpus.size = 0.8
@@ -24,12 +25,12 @@ if (!file.exists(corpus.dir)) {
 
 saveRDS(selector.training, file.path(corpus.dir, "training.lines.selector.rds"))
 
-write.to.file <- function(dir, suffix, extension, l_name, l_content) {
+write.lines.to.file <- function(dir, suffix, extension, l_name, l_content) {
     full.file.path <- file.path(dir, paste(l_name, suffix, extension, sep="."))
     conn = file(full.file.path, encoding = text.encoding)
     writeLines(l_content, conn)
     close(conn)
 }
 
-mapply(function (l_name, l_content) write.to.file(corpus.dir, "training", "txt", l_name, l_content), names(training.lines), training.lines)
-mapply(function (l_name, l_content) write.to.file(corpus.dir, "testing", "txt", l_name, l_content), names(testing.lines), testing.lines)
+mapply(function (l_name, l_content) write.lines.to.file(corpus.dir, "training", "txt", l_name, l_content), names(training.lines), training.lines)
+mapply(function (l_name, l_content) write.lines.to.file(corpus.dir, "testing", "txt", l_name, l_content), names(testing.lines), testing.lines)

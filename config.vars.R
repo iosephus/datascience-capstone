@@ -9,4 +9,9 @@ text.language = substring(basename(corpus.dir), 1, 2)
 min.word.len = 1
 max.word.len = 24
 line.factor = 0.03
+token.sentence.start = '<s>'
+token.sentence.end = '</s>'
+token.unknown = '<unk>'
+token.num = '<num>'
+num.cores = 12
 
