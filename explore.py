@@ -18,22 +18,27 @@ from nltk import tokenize
 import nltk.data
 
 data_dir = "C:\\Users\\JoseM\\Projects\\Capstone\\Data"
+corpus_dir = os.path.join(data_dir, 'corpora', 'en_US')
+corpus_file_pattern = ".+\.training\.txt"
 text_encoding = "utf-8"
 lang = "english"
 max_word_len = 24
 char_categories = {'alphanumeric': '[a-zA-Z]', 'space': r'[\s]', 'newline': r'\n', 'digit': '[0-9]', 'punctuation': re.escape(string.punctuation).join(['[', ']'])}
 reduction_factor = 1.0
-analyze_unigrams = False
-analyze_bigrams = False
-analyze_trigrams = False
-analyze_quadrigrams = True
+analyze_unigrams = True
+analyze_bigrams = True
+analyze_trigrams = True
+analyze_quadrigrams = False
 training_set_size = 0.8
-num_proc = 10
+num_proc = 12
 vocabulary = set([w.lower() for w in words.words()])
 min_freq = 50
 token_sentence_start = '<s>'
 token_sentence_end = '</s>'
-token_num = '<num>'
+token_number = '<num>'
+token_ordinal = '<ord>'
+token_email = '<email>'
+token_url = '<url>'
 token_unknown = '<unk>'
 
 sw = nltk.corpus.stopwords.words("english")
@@ -53,27 +58,29 @@ def split_corpus_text(corpus_text, n):
     chunks = [dict(zip(corpus_text.keys(), ct)) for ct in chunks_text]
     return(chunks)
 
-
-def clean_text(text):
-    #print('  Converting to lowercase')
-    result = text.lower()
-    #print('  Replacing space characters, newlines and dashes by spaces')
-    result = re.sub('[-\n\t\r\f\v]', ' ', result)
-    #print('  Removing contraction quotes')
-    result = re.sub('([a-z0-9])\'([a-z])', r'\1\2', result)
-    #print('  Shortening repeated strings')
-    result = re.sub(r'([a-z])\1{3,}', r'\1\1\1', result)
-    #print('  Removing punctuation')
-    result = re.sub(re.escape(string.punctuation).join(['[', ']']), "", result)
-    #print('  Removing repeated spaces')
-    result = re.sub(' {2,}', ' ', result)
+def remove_non_contraction_single_quotes(text):
+    result = re.sub('(^\'+)|(\'+$)', "", text)
+    result = re.sub('([^a-zA-Z0-9])\'+', r'\1', result)
+    result = re.sub('\'+([^a-zA-Z])', r'\1', result)
     return(result)
 
-def concat_lists_lowmem(list_of_lists):
-    result = list_of_lists[0]
-    for l in list_of_lists[1:]:
-        result.extend(l)
-        del(l[:])
+def remove_non_word_hyphens(text):
+    result = text
+    result = re.sub('([0-9])-([0-9])', r'\1\2', result)
+    result = re.sub('(^-+)|(-+$)', "", text)
+    result = re.sub('([^a-zA-Z0-9])-+', r'\1', result)
+    result = re.sub('-+([^a-zA-Z0-9])', r'\1', result)
+    return(result)
+
+def clean_text(text):
+    result = text
+    #print('  Removing non-contraction quotes')
+    result = remove_non_contraction_single_quotes(result)
+    result = remove_non_word_hyphens(result)
+    #print('  Shortening repeated strings')
+    result = re.sub(r'([a-zA-Z])\1{3,}', r'\1\1\1', result)
+    #print('  Removing non-word, space, hyphens, characters')
+    result = re.sub('[^\s\w\'-]', '', result)
     return(result)
 
 def clean_text_mp(text):
@@ -81,7 +88,6 @@ def clean_text_mp(text):
     num_proc_final = len(chunks)
     with mp.Pool(num_proc_final) as p:
         map_results = p.map(clean_text, chunks)
-    del(chunks)
     print("Reducing text cleaning results")
     result = " ".join(map_results)
     return(result)
@@ -89,7 +95,7 @@ def clean_text_mp(text):
 def clean_and_tokenize(text):
     result = clean_text(text)
     if result:
-        return([item for item in result.split(' ') if item])
+        return([item.lower() for item in re.split('[\s]+', result) if item])
     else:
         return([])
 
@@ -98,7 +104,7 @@ def clean_and_tokenize_mp(text):
     return(result.split(' '))
 
 def clean_and_tokenize_sentences(sentences):
-    result = [clean_and_tokenize_mp(s) for s in sentences]
+    result = [clean_and_tokenize(s) for s in sentences]
     result = [l for l in result if l]
     return(result)
 
@@ -107,9 +113,7 @@ def clean_and_tokenize_sentences_mp(sentences):
     num_proc_final = len(chunks)
     with mp.Pool(num_proc_final) as p:
         map_results = p.map(clean_and_tokenize_sentences, chunks)
-    del(chunks)
-    result = functools.reduce(lambda l1, l2: l1 + l2, map_results)
-    result = [l for l in result if l]
+    result = list(itertools.chain(*map_results))
     return(result)
 
 def gen_stopword_count_list(ngrams_l):
@@ -120,16 +124,35 @@ def gen_stopword_count_list_mp(ngrams_l):
     num_proc_final = len(chunks)
     with mp.Pool(num_proc_final) as p:
         map_results = p.map(gen_stopword_count_list, chunks)
-    del(chunks)
-    result = functools.reduce(lambda l1, l2: l1 + l2, map_results)
+    result = list(itertools.chain(*map_results))
     return(result)
+
+# Not sure if works, test!!!!
+def parallelize_function(fun):
+    def parfun(work):
+        chunks = split_seq(work, num_proc)
+        num_proc_final = len(chunks)
+        with mp.Pool(num_proc_final) as p:
+            map_results = p.map(fun, chunks)
+        result = list(itertools.chain(*map_results))
+        return(result)
+    return(parfun)
+
+def is_word_quick(w):
+    return(re.match('^(?:[\w]+[\'-])*[\w]+$', w) is not None) 
 
 def vocabulary_class_filter(w, vocabulary=vocabulary):
     stemmer = stem.snowball.EnglishStemmer()
-    if w.isalpha() and (w in vocabulary or stemmer.stem(w) in vocabulary):
+    if is_word_quick(w) and (w in vocabulary or stemmer.stem(w) in vocabulary):
         return(w)
-    elif w.isdigit() or re.match('^[0-9]*1st$|^[0-9]*2nd$|^[0-9]*3rd$|^[0-9]*[4567890]th$|^[0-9]*1[123]th$', w) is not None:
-        return(token_num)
+    elif re.match('^[0-9]*1st$|^[0-9]*2nd$|^[0-9]*3rd$|^[0-9]*[4567890]th$|^[0-9]*1[123]th$', w) is not None:
+        return(token_ordinal)
+    elif re.match('^[+-]?[0-9]+$', w) is not None:
+        return(token_number)
+    elif w == '_URL_':
+        return(token_url)
+    elif w == '_EMAIL_':
+        return(token_email)
     else:
         return(token_unknown)
 
@@ -141,8 +164,7 @@ def vocabulary_class_filter_list_mp(sl):
     num_proc_final = len(chunks)
     with mp.Pool(num_proc_final) as p:
         map_results = p.map(vocabulary_class_filter_list, chunks)
-    del(chunks)
-    result = functools.reduce(lambda l1, l2: l1 + l2, map_results)
+    result = list(itertools.chain(*map_results))
     return(result)
 
 
@@ -150,7 +172,7 @@ def create_freq_dataframe(fdist, extra=None):
     fngrams, fcounts = list(zip(*fdist.items()))
     fngrams = [' '.join(t) for t in fngrams]
     df = pd.DataFrame({'ngram': fngrams, 'freq': fcounts})
-    df['stopwords'] = np.array(gen_stopword_count_list_mp(fngrams))
+    #df['stopwords'] = np.array(gen_stopword_count_list_mp(fngrams))
     if extra is not None:
         fngrams_extra, fcounts_extra = list(zip(*extra.items()))
         df_extra = pd.DataFrame({'ngram': fngrams_extra, 'freq': fcounts_extra})
@@ -161,7 +183,7 @@ def create_freq_dataframe(fdist, extra=None):
 def tokenize_into_sentences(lines):
     sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
     s = [sent_detector.tokenize(l) for l in lines]
-    result = functools.reduce(lambda l1, l2: l1 + l2, s)
+    result = list(itertools.chain(*s))
     return(result)
 
 def tokenize_into_sentences_mp(all_lines):
@@ -169,126 +191,160 @@ def tokenize_into_sentences_mp(all_lines):
     num_proc_final = len(chunks)
     with mp.Pool(num_proc_final) as p:
         map_results = p.map(tokenize_into_sentences, chunks)
-    del(chunks)
-    print("Reducing text cleaning results")
-    result = functools.reduce(lambda l1, l2: l1 + l2, map_results)
+    result = list(itertools.chain(*map_results))
     return(result)
 
 def get_ngrams(sentence, n, pad=True):
     if pad:
-        padded_sentence = [token_sentence_start] + sentence + [token_sentence_end]
+        padded_sentence = itertools.chain([token_sentence_start], sentence, [token_sentence_end])
     else:
         padded_sentence = sentence
     result = list(ngrams(padded_sentence, n))
     return(result)
+
+def clean_corpus_from_urls_etc(text):
+    result = text
+    result = re.sub('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '_URL_', result)
+    result = re.sub('ftp[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '_URL_', result)
+    result = re.sub('([\w\-\.]+@\w[\w\-]+\.+[\w\-]+)', '_EMAIL_', result)
+    return(result)
+
+
+def get_ngram_prev(ngram, sep=' '):
+    return(sep.join(ngram.split(sep)[:-1]))
+
+def add_p_column(fdist, fdist_prev):
+    freq_prev = dict(zip(fdist_prev['ngram'], fdist_prev['freq']))
+    fdist['p'] = np.array(fdist['freq']) / np.array([freq_prev[get_ngram_prev(ngram)] for ngram in fdist['ngram']])
+
+def compute_probabilities(fdist):
+
+    fdist[1]['p'] = fdist[1]['freq'] / sum(fdist[1]['freq'])
+
+    for n in sorted(fdist.keys())[1:]:
+        fdist[1]['p'] = fdist[1]['freq'] / sum(fdist[1]['freq'])
+
+def get_next_word(fdist, phrase, max_size=5, do_not_predict=[token_sentence_start, token_sentence_end, token_number, token_ordinal, token_email, token_url, token_unknown]):
+    phrase_tokens = list(itertools.chain([token_sentence_start], clean_and_tokenize(phrase)))
+    n_values = sorted(fdist.keys())
+    n_min = min(n_values)
+    n_max = max(n_values)
+    start = min(len(phrase_tokens) + 1, n_max - 1)
+    search_values = sorted([n for n in n_values if n >= start], reverse=True)
+    def get_next_word_aux(remaining_search_values):
+        n = remaining_search_values[0]
+        if n == 1:
+              return(fdist[1]['ngram'][0:max_size])
+        root = ''.join([' '.join(phrase_tokens[1 - n:]), ' '])
+        fdist_data = fdist[n]
+        matches = fdist_data[fdist_data['ngram'].str.startswith(root)]['ngram'][0:max_size]
+        if len(matches) > 0:
+            return matches
+        return(get_next_word_aux(remaining_search_values[1:]))
+    results = get_next_word_aux(search_values)
+    return(results)
 
 if __name__ == "__main__":
     start_time_script = time.time()
 
     print("Reading corpus")
     start_time = time.time()
-    corpus_reader = nltk.corpus.PlaintextCorpusReader(data_dir, 'training_set\.txt', encoding=text_encoding)
+    corpus_reader = nltk.corpus.PlaintextCorpusReader(corpus_dir, corpus_file_pattern, encoding=text_encoding)
     corpus_text = corpus_reader.raw()
     print("Done. Took %f seconds" % (time.time() - start_time))
 
-    #print("Splitting lines")
-    #start_time = time.time()
-    #lines = corpus_text.splitlines()
-    #print("Done. Took %f seconds" % (time.time() - start_time))
+    print("Removing URLs, emails, etc.")
+    start_time = time.time()
+    corpus_text = clean_corpus_from_urls_etc(corpus_text)
+    print("Done. Took %f seconds" % (time.time() - start_time))
 
-    #print("Tokenizing into sentences (parallel)")
-    #start_time = time.time()
-    #sentences = tokenize_into_sentences_mp(lines)
-    #sentences = [corpus_text]
-    #print("Done. Took %f seconds" % (time.time() - start_time))
+    print("Splitting lines (sentences)")
+    start_time = time.time()
+    lines = corpus_text.splitlines()
+    print("Done. Took %f seconds" % (time.time() - start_time))
+    del(corpus_text)
+
+    print("Tokenizing into sentences (parallel)")
+    start_time = time.time()
+    sentences = tokenize_into_sentences_mp(lines)
+    print("Done. Took %f seconds" % (time.time() - start_time))
+    del(lines)
 
     print("Tokenizing into words (parallel)")
     start_time = time.time()
-    tokens_unigrams_raw = clean_and_tokenize_mp(corpus_text)
-    del(corpus_text)
+    tokens_unigrams_raw = clean_and_tokenize_sentences_mp(sentences)
     print("Done. Took %f seconds" % (time.time() - start_time))
+    del(sentences)
 
     print("Computing raw unigram frequencies")
     start_time = time.time()
-    #unigrams_raw = functools.reduce(lambda l1, l2: l1 + l2, [list(ngrams(s, 1)) for s in tokens_unigrams_raw])
-    unigrams_raw = list(ngrams(tokens_unigrams_raw, 1))
+    unigrams_raw = list(itertools.chain(*[list(ngrams(s, 1)) for s in tokens_unigrams_raw]))
     fdist_unigrams_raw = nltk.FreqDist(unigrams_raw)
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     print("Filtering out-of-vocabulary unigrams")
     start_time = time.time()
-    frequent_unigrams = set((unigram[0] for unigram, freq in fdist_unigrams_raw.items() if unigram[0].isalpha() and freq >= min_freq))
+    frequent_unigrams = set((unigram[0] for unigram, freq in fdist_unigrams_raw.items() if is_word_quick(unigram[0]) and freq >= min_freq))
     vocabulary_extended = vocabulary.union(frequent_unigrams)
-    tokens_unigrams = [vocabulary_class_filter(w, vocabulary_extended) for w in tokens_unigrams_raw]
-    del(tokens_unigrams_raw)
-    del(fdist_unigrams_raw)
-    del(unigrams_raw)
-    #del(vocabulary_extended)
-    del(frequent_unigrams)
+    tokens_unigrams = vocabulary_class_filter_list(tokens_unigrams_raw, vocabulary_extended)
     print("Done. Took %f seconds" % (time.time() - start_time))
-
+    del(tokens_unigrams_raw)
+    del(unigrams_raw)
+    
     if analyze_unigrams:
         print("Computing unigram frequencies")
         start_time = time.time()
-        #unigrams = functools.reduce(lambda l1, l2: l1 + l2, [get_ngrams(s, 1, pad=False) for s in tokens_unigrams])
-        unigrams = ngrams(tokens_unigrams , 1)
+        unigrams = list(itertools.chain(*[get_ngrams(s, 1, pad=True) for s in tokens_unigrams]))
         fdist_unigrams = nltk.FreqDist(unigrams)
-        del(unigrams)
+        fdist_unigrams = dict([(unigram, freq) for unigram, freq in fdist_unigrams.items() if unigram[0] != token_sentence_end])
         print("Done. Took %f seconds" % (time.time() - start_time))
 
         print("Building unigram frequencies data frame (parallel)")
         start_time = time.time()
         fdist_unigrams_data = create_freq_dataframe(fdist_unigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
+	del(fdist_unigrams)
 
         print("Saving unigram frequencies")
         start_time = time.time()
         fdist_unigrams_data.to_csv(os.path.join(data_dir, "fdist_ngrams_1.csv"), index = False)
         print("Done. Took %f seconds" % (time.time() - start_time))
-        del(fdist_unigrams)
-        #del(fdist_unigrams_data)
 
     if analyze_bigrams:
         print("Computing bigram frequencies")
         start_time = time.time()
-        #bigrams = functools.reduce(lambda l1, l2: l1 + l2, [get_ngrams(s, 2, pad=False) for s in tokens_unigrams])
-        bigrams = ngrams(tokens_unigrams , 2)
+        bigrams = list(itertools.chain(*[get_ngrams(s, 2, pad=True) for s in tokens_unigrams]))
         fdist_bigrams = nltk.FreqDist(bigrams)
-        del(bigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
 
         print("Building bigram frequencies data frame (parallel)")
         start_time = time.time()
         fdist_bigrams_data = create_freq_dataframe(fdist_bigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
+	del(fdist_bigrams)
 
         print("Saving bigram frequencies")
         start_time = time.time()
         fdist_bigrams_data.to_csv(os.path.join(data_dir, "fdist_ngrams_2.csv"), index = False)
         print("Done. Took %f seconds" % (time.time() - start_time))
-        del(fdist_bigrams)
-        del(fdist_bigrams_data)
 
     if analyze_trigrams:
         print("Computing trigram frequencies")
         start_time = time.time()
-        #trigrams = functools.reduce(lambda l1, l2: l1 + l2, [get_ngrams(s, 3, pad=False) for s in tokens_unigrams])
-        trigrams = ngrams(tokens_unigrams , 3)
+        trigrams = list(itertools.chain(*[get_ngrams(s, 3, pad=True) for s in tokens_unigrams]))
         fdist_trigrams = nltk.FreqDist(trigrams)
-        del(trigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
 
         print("Building trigram frequencies data frame (parallel)")
         start_time = time.time()
         fdist_trigrams_data = create_freq_dataframe(fdist_trigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
+	del(fdist_trigrams)
 
         print("Saving trigram frequencies")
         start_time = time.time()
         fdist_trigrams_data.to_csv(os.path.join(data_dir, "fdist_ngrams_3.csv"), index = False)
         print("Done. Took %f seconds" % (time.time() - start_time))
-        del(fdist_trigrams)
-        del(fdist_trigrams_data)
 
     if analyze_quadrigrams:
         print("Computing quadrigram frequencies")
@@ -298,9 +354,9 @@ if __name__ == "__main__":
 
         print("Building quadrigram frequencies data frame (parallel)")
         start_time = time.time()
+        quadrigrams = list(itertools.chain(*[get_ngrams(s, 4, pad=True) for s in tokens_unigrams]))
+        fdist_quadrigrams = nltk.FreqDist(quadrigrams)
         fdist_quadrigrams_data = create_freq_dataframe(fdist_quadrigrams)
-        #quadrigrams = functools.reduce(lambda l1, l2: l1 + l2, [get_ngrams(s, 4, pad=False) for s in tokens_unigrams])
-        #fdist_trigrams = nltk.FreqDist(quadrigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
 
         print("Saving trigram frequencies")
