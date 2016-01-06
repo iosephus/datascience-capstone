@@ -168,15 +168,12 @@ def vocabulary_class_filter_list_mp(sl):
     return(result)
 
 
-def create_freq_dataframe(fdist, extra=None):
+def create_freq_dataframe(fdist, sep=' '):
     fngrams, fcounts = list(zip(*fdist.items()))
-    fngrams = [' '.join(t) for t in fngrams]
-    df = pd.DataFrame({'ngram': fngrams, 'freq': fcounts})
-    #df['stopwords'] = np.array(gen_stopword_count_list_mp(fngrams))
-    if extra is not None:
-        fngrams_extra, fcounts_extra = list(zip(*extra.items()))
-        df_extra = pd.DataFrame({'ngram': fngrams_extra, 'freq': fcounts_extra})
-        df = df.append(df_extra)
+    lwords = [t[-1] for t in fngrams]
+    df = pd.DataFrame({'lastword': lwords, 'freq': fcounts})
+    if len(fngrams[0]) > 1:
+        df['root'] = [sep.join(t[:-1]) for t in fngrams]
     df.sort_values(by=['freq'], ascending=False, inplace=True)
     return(df)
 
@@ -244,6 +241,19 @@ def get_next_word(fdist, phrase, max_size=5, do_not_predict=[token_sentence_star
     results = get_next_word_aux(search_values)
     return(results)
 
+def create_optimized_ngram_model(fdist, sep=' '):
+    result = pd.DataFrame(freq=df['freq'])
+    if order == 1:
+        result['lastword'] = [text_dicts[1][s] for s in df['ngram']]
+    else:
+        splits = [s.split(sep) for s in df['ngram']]
+        result['lastword'] = [text_dicts[1][s[-1]] for s in splits]
+        result['root'] = [sep.join(s[:-1]) for s in splits]
+    return(result)
+
+def create_model(fdist):
+    text_dicts = dict([(k, dict(v['ngram'], range(len(v['ngram'])))) for k, v in fdist.items()])
+
 if __name__ == "__main__":
     start_time_script = time.time()
 
@@ -303,7 +313,7 @@ if __name__ == "__main__":
         start_time = time.time()
         fdist_unigrams_data = create_freq_dataframe(fdist_unigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
-	del(fdist_unigrams)
+        del(fdist_unigrams)
 
         print("Saving unigram frequencies")
         start_time = time.time()
@@ -321,7 +331,7 @@ if __name__ == "__main__":
         start_time = time.time()
         fdist_bigrams_data = create_freq_dataframe(fdist_bigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
-	del(fdist_bigrams)
+        del(fdist_bigrams)
 
         print("Saving bigram frequencies")
         start_time = time.time()
@@ -339,7 +349,7 @@ if __name__ == "__main__":
         start_time = time.time()
         fdist_trigrams_data = create_freq_dataframe(fdist_trigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
-	del(fdist_trigrams)
+        del(fdist_trigrams)
 
         print("Saving trigram frequencies")
         start_time = time.time()
