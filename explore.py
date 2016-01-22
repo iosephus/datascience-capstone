@@ -307,7 +307,7 @@ if __name__ == "__main__":
    
     print("Saving vocabulary")
     start_time = time.time()
-    vocabulary_df = pd.DataFrame({'word': vocabulary_extended})
+    vocabulary_df = pd.DataFrame({'word': [w for w in vocabulary_extended]})
     vocabulary_df.to_csv(os.path.join(data_dir, "vocabulary.csv"), index = False)
     print("Done. Took %f seconds" % (time.time() - start_time))
 
