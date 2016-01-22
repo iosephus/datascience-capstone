@@ -254,6 +254,11 @@ def create_optimized_ngram_model(fdist, sep=' '):
 def create_model(fdist):
     text_dicts = dict([(k, dict(v['ngram'], range(len(v['ngram'])))) for k, v in fdist.items()])
 
+def p_kneser_ney(fdist, ngram):
+    if length(ngram) == 1:
+        p = sum(fdist_bigrams_data.lastword == ngram[0]) / len(fdist_bigrams_data.index)
+        return(p)
+
 if __name__ == "__main__":
     start_time_script = time.time()
 
@@ -284,7 +289,6 @@ if __name__ == "__main__":
     start_time = time.time()
     tokens_unigrams_raw = clean_and_tokenize_sentences_mp(sentences)
     print("Done. Took %f seconds" % (time.time() - start_time))
-    del(sentences)
 
     print("Computing raw unigram frequencies")
     start_time = time.time()
@@ -300,20 +304,25 @@ if __name__ == "__main__":
     print("Done. Took %f seconds" % (time.time() - start_time))
     del(tokens_unigrams_raw)
     del(unigrams_raw)
-    
+   
+    print("Saving vocabulary")
+    start_time = time.time()
+    vocabulary_df = pd.DataFrame({'word': vocabulary_extended})
+    vocabulary_df.to_csv(os.path.join(data_dir, "vocabulary.csv"), index = False)
+    print("Done. Took %f seconds" % (time.time() - start_time))
+
     if analyze_unigrams:
         print("Computing unigram frequencies")
         start_time = time.time()
         unigrams = list(itertools.chain(*[get_ngrams(s, 1, pad=True) for s in tokens_unigrams]))
         fdist_unigrams = nltk.FreqDist(unigrams)
-        fdist_unigrams = dict([(unigram, freq) for unigram, freq in fdist_unigrams.items() if unigram[0] != token_sentence_end])
+        # fdist_unigrams = dict([(unigram, freq) for unigram, freq in fdist_unigrams.items() if unigram[0] != token_sentence_end])
         print("Done. Took %f seconds" % (time.time() - start_time))
 
         print("Building unigram frequencies data frame (parallel)")
         start_time = time.time()
         fdist_unigrams_data = create_freq_dataframe(fdist_unigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
-        del(fdist_unigrams)
 
         print("Saving unigram frequencies")
         start_time = time.time()
@@ -331,7 +340,6 @@ if __name__ == "__main__":
         start_time = time.time()
         fdist_bigrams_data = create_freq_dataframe(fdist_bigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
-        del(fdist_bigrams)
 
         print("Saving bigram frequencies")
         start_time = time.time()
@@ -349,7 +357,6 @@ if __name__ == "__main__":
         start_time = time.time()
         fdist_trigrams_data = create_freq_dataframe(fdist_trigrams)
         print("Done. Took %f seconds" % (time.time() - start_time))
-        del(fdist_trigrams)
 
         print("Saving trigram frequencies")
         start_time = time.time()
