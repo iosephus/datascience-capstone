@@ -69,6 +69,46 @@ def complete_sentence_simple(root, model, max_size=5):
     words = [model['word_index'][w] for w in results['ilast']]
     return([(w, p) for w, p in zip(words, results.p)])
 
+def get_ngram_probability(ng, model):
+    print(ng)
+    p = 0.1;
+    return(p)
+
+def sentence_probability(sentence, model):
+    tsentence = clean_and_tokenize(sentence)
+    tsentence = vocabulary_class_filter_list([tsentence], model['vocabulary'])[0]
+    p_sentence = tsentence_probability(tsentence, model)
+    return(p_sentence)
+
+def tsentence_probability(tsentence, model):
+    ts = list(itertools.repeat(tokens['sentence_start'], model['order'] - 1))
+    ts = ts + tsentence
+    ts = ts + [tokens['sentence_end']]
+    ng = ngrams(ts, model['order'])
+    p_ng = [get_ngram_probability(n, model) for n in ng]
+    p_sentence = functools.reduce(lambda x, y: x * y, p_ng)
+    return(p_sentence)
+
+
+def sentence_list_probability(sl, model):
+    psl = [tsentence_probability(s, model) for s in sl]
+    p = functools.reduce(lambda x, y: x * y, psl)
+    return(p)
+
+def sentence_list_probability_mp(sl, model):
+    chunks = split_seq(sl, num_proc)
+    num_proc_final = len(chunks)
+    with mp.Pool(num_proc_final) as p:
+        map_results = p.map(sentence_list_probability, chunks)
+    p = functools.reduce(lambda x, y: x * y, map_results)
+    return(p)
+
+def get_cross_entropy(sl, model):
+    p = sentence_list_probability(sl, model)
+    number_of_words = sum([len(s) for s in sl]) + len(sl)
+    h = -math.log2(p) / number_of_words
+    return(h)
+
 if __name__ == "__main__":
     start_time_script = time.time()
 

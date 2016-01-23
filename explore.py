@@ -25,9 +25,11 @@ lang = "english"
 max_word_len = 24
 char_categories = {'alphanumeric': '[a-zA-Z]', 'space': r'[\s]', 'newline': r'\n', 'digit': '[0-9]', 'punctuation': re.escape(string.punctuation).join(['[', ']'])}
 reduction_factor = 1.0
-analyze_unigrams = True
-analyze_bigrams = True
-analyze_trigrams = True
+save_vocabulary = False
+save_tokens_unigrams = False
+analyze_unigrams = False
+analyze_bigrams = False
+analyze_trigrams = False
 analyze_quadrigrams = False
 training_set_size = 0.8
 num_proc = 12
@@ -267,6 +269,19 @@ def p_kneser_ney(fdist, ngram):
         p = sum(fdist_bigrams_data.lastword == ngram[0]) / len(fdist_bigrams_data.index)
         return(p)
 
+def save_tokens_unigrams(fname, tokens_unigrams):
+    lines = [' '.join(s) for s in tokens_unigrams]
+    with open(fname, 'w') as fp:
+        fp.write('\n'.join(lines))
+
+
+def read_tokens_unigrams(fname):
+    with open(fname) as fp:
+        text = fp.read()
+    lines = text.split('\n')
+    tokens_unigrams = [l.split(' ') for l in lines]
+    return(tokens_unigrams)
+
 if __name__ == "__main__":
     start_time_script = time.time()
 
@@ -312,12 +327,19 @@ if __name__ == "__main__":
     print("Done. Took %f seconds" % (time.time() - start_time))
     del(tokens_unigrams_raw)
     del(unigrams_raw)
-   
-    print("Saving vocabulary")
-    start_time = time.time()
-    vocabulary_df = pd.DataFrame({'word': [w for w in vocabulary_extended]})
-    vocabulary_df.to_csv(os.path.join(data_dir, "vocabulary.csv"), index = False)
-    print("Done. Took %f seconds" % (time.time() - start_time))
+  
+    if save_vocabulary:
+        print("Saving vocabulary")
+        start_time = time.time()
+        vocabulary_df = pd.DataFrame({'word': [w for w in vocabulary_extended]})
+        vocabulary_df.to_csv(os.path.join(data_dir, "vocabulary.csv"), index = False)
+        print("Done. Took %f seconds" % (time.time() - start_time))
+
+    if save_tokens_unigrams:
+        print("Saving tokens unigrams")
+        start_time = time.time()
+        save_tokens_unigrams(os.path.join(data_dir, "tokens.txt"), tokens_unigrams)
+        print("Done. Took %f seconds" % (time.time() - start_time))
 
     if analyze_unigrams:
         print("Computing unigram frequencies")
