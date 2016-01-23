@@ -41,6 +41,14 @@ token_email = '<email>'
 token_url = '<url>'
 token_unknown = '<unk>'
 
+tokens = {'sentence_start': '<s>',
+          'sentence_end': '</s>',
+          'number': '<num>',
+          'ordinal': '<ord>',
+          'email': '<email>',
+          'url': '<url>',
+          'unknown': '<unk>'}
+
 sw = nltk.corpus.stopwords.words("english")
 
 def count_stopwords(ngram, sw=sw):
