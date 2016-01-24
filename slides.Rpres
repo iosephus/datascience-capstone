@@ -8,7 +8,7 @@ JHU/Coursera Data Science Specialization Capstone Project
 The product
 ========================================================
 
-![Text box](textbox.png) morning
+![Text box](textbox.png)
 
 <small>
 Instructions
@@ -17,6 +17,7 @@ Instructions
 - Enter phrase in text box
 - Click the *Complete phrase* button
 - Completion word will appear on the right
+- A few other possible words will be listed
 - When text box is empty, suggestions for starting words will appear
 
 Visit the app at [https://iosephus.shinyapps.io/capstone/](https://iosephus.shinyapps.io/capstone/)
