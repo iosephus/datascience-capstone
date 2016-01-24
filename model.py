@@ -13,7 +13,7 @@ from explore import *
 model_cutoff = {}
 model_cutoff[1] = 0
 model_cutoff[2] = 0
-model_cutoff[3] = 1
+model_cutoff[3] = 0
 
 def compute_kneserney_p_unigram(unigram_index, fdist_bigrams_df):
     p = len(fdist_bigrams_df[fdist_bigrams_df.ilast == unigram_index]) / len(fdist_bigrams_df)
@@ -25,18 +25,63 @@ def compute_kneserney_d(fdist_df):
     d = n1 / (n1 + 2 * n2)
     return(d)
 
-def compute_kneserney_p_raw(fdist_df, freqsum, model_d=None):
+def compute_kneserney_d123(fdist_df):
+    n1 = len(fdist_df[fdist_df.freq == 1])
+    n2 = len(fdist_df[fdist_df.freq == 2])
+    n3 = len(fdist_df[fdist_df.freq == 3])
+    n4 = len(fdist_df[fdist_df.freq == 4])
+    y = n1 / (n1 + 2 * n2)
+    d1 = 1 - 2 * y * n2 / n1
+    d2 = 2 - 3 * y * n3 / n2
+    d3 = 3 - 4 * y * n4 / n3
+    d123 = {1: d1, 2: d2, 3: d3, 'y': y}
+    return(d123)
 
-    if model_d is None:
-        final_d = compute_knerseney_d(fdist_df)
+def get_d(count, model_d):
+    return(model_d[min(count, 3)])
+
+def compute_kneserney_p_discounted(fdist_df, freqsum, model_d):
+    discounts = np.array([model_d[min(freq, 3)] for freq in fdist_df.freq])
+    p_disc = (np.array(fdist_df.freq) - discounts) / freqsum
+    p_disc = p_disc.clip(min=0)
+    return(p_disc)
+
+def compute_kneserney_rcoeff(fdist_df, freqsum, model_d, cutoff_corr=0):
+    rcoeff = np.zeros(len(fdist_df))
+    fdist_n1_df = fdist_df[fdist_df.freq == 1]
+    if len(fdist_n1_df) > 0:
+        g1 = fdist_n1_df[['iroot', 'lastword']].groupby(['iroot'])
+        n1 = dict(zip(g1.iroot.first(), g1.iroot.size()))
+        n1_arr = np.array([n1[i] if i in n1 else 0 for i in fdist_df.iroot])
+        rcoeff = rcoeff + model_d[1] * n1_arr
+    fdist_n2_df = fdist_df[fdist_df.freq == 2]
+    if len(fdist_n2_df) > 0:
+        g2 = fdist_n2_df[['iroot', 'lastword']].groupby(['iroot'])
+        n2 = dict(zip(g2.iroot.first(), g2.iroot.size()))
+        n2_arr = np.array([n2[i] if i in n2 else 0 for i in fdist_df.iroot])
+        rcoeff = rcoeff + model_d[2] * n2_arr
+    fdist_n3_df = fdist_df[fdist_df.freq >= 3]
+    if len(fdist_n3_df) > 0:
+        g3 = fdist_n3_df[['iroot', 'lastword']].groupby(['iroot'])
+        n3 = dict(zip(g3.iroot.first(), g3.iroot.size()))
+        n3_arr = np.array([n3[i] if i in n3 else 0 for i in fdist_df.iroot])
+        rcoeff = rcoeff + (model_d[3] * n3_arr)
+    rcoeff = rcoeff + cutoff_corr
+    rcoeff = rcoeff / freqsum
+    return(rcoeff)
+
+
+def compute_knesserney_p_smooth(fdist_df, freqsum, model_d, fdist_lower_df, cutoff_corr=0):
+    p_discounted = compute_kneserney_p_discounted(fdist_df, freqsum, model_d)
+    r_coeff = compute_kneserney_rcoeff(fdist_df, freqsum, model_d, cutoff_corr)
+    if 'root' in fdist_lower_df.columns:
+        p_lower_dict = dict((' '.join((root, last)), p) for root, last, p in zip(fdist_lower_df.root, fdist_lower_df.lastword, fdist_lower_df.p))
+        p_lower = np.array([p_lower_dict[lower_order_ngram(root, last)] for root, last in zip(fdist_df.root, fdist_df.lastword)])
     else:
-        final_d = model_d
-
-    if final_d < 0 or final_d > 1:
-        raise ValueError("D should be between zero and one")
-
-    p_raw = (fdist_df.freq - final_d) / freqsum
-    return(p_raw)
+        p_lower_dict = dict((last, p) for last, p in zip(fdist_lower_df.lastword, fdist_lower_df.p))
+        p_lower = np.array([p_lower_dict[last] for last in fdist_df.lastword])
+    p_smooth = p_discounted + r_coeff * p_lower
+    return(p_smooth)
 
 def lower_order_ngram(root, last, sep=' '):
     lower_order_root = sep.join(root.split(sep)[1:])
@@ -47,7 +92,7 @@ def complete_sentence_simple_aux(ts, model, max_size):
     search_order = min(len(ts) + 1, model['order'])
     search_data_frame = model['ngrams'][search_order]
     if search_order == 1:
-        return(['lastword'][0:max_size])
+        return(search_data_frame['lastword'][0:max_size])
     search_root_dict = model['indices'][search_order - 1]
     root = ' '.join(ts)
     if root in search_root_dict:
@@ -139,42 +184,48 @@ if __name__ == "__main__":
     fdist_unigrams_df = pd.read_csv(os.path.join(data_dir, "fdist_ngrams_1.csv"), encoding='windows-1252')
     fdist_unigrams_df.freq = fdist_unigrams_df.freq.astype(int)
     fdist_unigrams_df.lastword = fdist_unigrams_df.lastword.astype(str)
-    freqsum_unigrams = fdist_unigrams_df.freq.sum()
-    if model_cutoff[1] > 0:
-        fdist_unigrams_df = fdist_unigrams_df[fdist_unigrams_df.freq > model_cutoff[1]]
-        cutoff_corr_unigrams = 1.0 - fdist_unigrams_df.freq.sum() / freqsum_unigrams
-    else:
-        cutoff_corr_unigrams = 0.0
     print("   Bigrams...")
     fdist_bigrams_df = pd.read_csv(os.path.join(data_dir, "fdist_ngrams_2.csv"), encoding='windows-1252')
     fdist_bigrams_df.freq = fdist_bigrams_df.freq.astype(int)
     fdist_bigrams_df.lastword = fdist_bigrams_df.lastword.astype(str)
     fdist_bigrams_df.root = fdist_bigrams_df.root.astype(str)
-    freqsum_bigrams = fdist_bigrams_df.freq.sum()
-    if model_cutoff[2] > 0:
-        fdist_bigrams_df = fdist_bigrams_df[fdist_bigrams_df.freq > model_cutoff[2]]
-        cutoff_corr_bigrams = 1.0 - fdist_bigrams_df.freq.sum() / freqsum_bigrams
-    else:
-        cutoff_corr_bigrams = 0.0
     print("   Trigrams...")
     fdist_trigrams_df = pd.read_csv(os.path.join(data_dir, "fdist_ngrams_3.csv"), encoding='windows-1252')
     fdist_trigrams_df.freq = fdist_trigrams_df.freq.astype(int)
     fdist_trigrams_df.lastword = fdist_trigrams_df.lastword.astype(str)
     fdist_trigrams_df.root = fdist_trigrams_df.root.astype(str)
-    freqsum_trigrams = fdist_trigrams_df.freq.sum()
-    if model_cutoff[3] > 0:
-        fdist_trigrams_df = fdist_trigrams_df[fdist_trigrams_df.freq > model_cutoff[3]]
-        cutoff_corr_trigrams = 1.0 - fdist_trigrams_df.freq.sum() / freqsum_trigrams
-    else:
-        cutoff_corr_trigrams = 0.0
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     print("Computing model D")
     start_time = time.time()
     model_d = {}
-    model_d[3] = compute_kneserney_d(fdist_trigrams_df)
-    model_d[2] = compute_kneserney_d(fdist_bigrams_df)
-    model_d[1] = compute_kneserney_d(fdist_unigrams_df)
+    model_d[1] = compute_kneserney_d123(fdist_unigrams_df)
+    model_d[2] = compute_kneserney_d123(fdist_bigrams_df)
+    model_d[3] = compute_kneserney_d123(fdist_trigrams_df)
+    print("Done. Took %f seconds" % (time.time() - start_time))
+
+    print("Applying cutoffs")
+    start_time = time.time()
+    freqsum_unigrams = fdist_unigrams_df.freq.sum()
+    if model_cutoff[1] > 0:
+        fdist_unigrams_df = fdist_unigrams_df[fdist_unigrams_df.freq > model_cutoff[1]]
+        cutoff_corr_unigrams = freqsum_unigrams - fdist_unigrams_df.freq.sum()
+    else:
+        cutoff_corr_unigrams = 0
+
+    freqsum_bigrams = fdist_bigrams_df.freq.sum()
+    if model_cutoff[2] > 0:
+        fdist_bigrams_df = fdist_bigrams_df[fdist_bigrams_df.freq > model_cutoff[2]]
+        cutoff_corr_bigrams = freqsum_bigrams - fdist_bigrams_df.freq.sum()
+    else:
+        cutoff_corr_bigrams = 0
+
+    freqsum_trigrams = fdist_trigrams_df.freq.sum()
+    if model_cutoff[3] > 0:
+        fdist_trigrams_df = fdist_trigrams_df[fdist_trigrams_df.freq > model_cutoff[3]]
+        cutoff_corr_trigrams = freqsum_trigrams - fdist_trigrams_df.freq.sum()
+    else:
+        cutoff_corr_trigrams = 0
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     print("Creating string to index dictionaries")
@@ -203,45 +254,17 @@ if __name__ == "__main__":
     p_unigrams_df = pd.DataFrame({'ilast': g.ilast.first(), 'p': g.ilast.size() / len(fdist_bigrams_df)})
     p_unigrams_df = p_unigrams_df.reset_index(drop=True)
     p_unigrams = dict(zip(p_unigrams_df.ilast, p_unigrams_df.p))
-    print("Done. Took %f seconds" % (time.time() - start_time))
-
-    print("Computing unigram coefficients when bigram root")
-    start_time = time.time()
-    g = fdist_bigrams_df[['iroot', 'lastword']].groupby(['iroot'])
-    rcoeff_unigrams_df = pd.DataFrame({'iroot': g.iroot.first(), 'rcoeff': model_d[2] * g.iroot.size() / freqsum_bigrams + cutoff_corr_bigrams})
-    rcoeff_unigrams_df = rcoeff_unigrams_df.reset_index(drop=True)
-    rcoeff_unigrams = dict(zip(rcoeff_unigrams_df.iroot, rcoeff_unigrams_df.rcoeff))
+    fdist_unigrams_df['p'] = np.array([p_unigrams[i] if i in p_unigrams else 0 for i in fdist_unigrams_df.ilast])
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     print("Computing smooth bigram probabilities")
     start_time = time.time()
-    p_raw = compute_kneserney_p_raw(fdist_bigrams_df, freqsum_bigrams, model_d[2])
-    rcoeff = np.array([rcoeff_unigrams[i] for i in fdist_bigrams_df.iroot])
-    p_lower_model = np.array([p_unigrams[i] for i in fdist_bigrams_df.ilast])
-
-    fdist_bigrams_df['p'] = p_raw + rcoeff * p_lower_model
-    p_bigrams = dict((model_dict_bigrams[' '.join((root, last))], p) for root, last, p in zip(fdist_bigrams_df.root, fdist_bigrams_df.lastword, fdist_bigrams_df.p))
-    print("Done. Took %f seconds" % (time.time() - start_time))
-
-
-    print("Computing bigram coefficients when trigram root")
-    start_time = time.time()
-    g = fdist_trigrams_df[['iroot', 'lastword']].groupby(['iroot'])
-    rcoeff_bigrams_df = pd.DataFrame({'iroot': g.iroot.first(), 'rcoeff': model_d[3] * g.iroot.size() / freqsum_trigrams + cutoff_corr_trigrams})
-    rcoeff_bigrams_df = rcoeff_bigrams_df.reset_index(drop=True)
-    rcoeff_bigrams = dict(zip(rcoeff_bigrams_df.iroot, rcoeff_bigrams_df.rcoeff))
+    fdist_bigrams_df['p'] = compute_knesserney_p_smooth(fdist_bigrams_df, freqsum_bigrams, model_d[2], fdist_unigrams_df, cutoff_corr_bigrams)
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     print("Computing smooth trigram probabilities")
     start_time = time.time()
-    p_raw = compute_kneserney_p_raw(fdist_trigrams_df, freqsum_trigrams, model_d[3])
-    rcoeff = np.array([rcoeff_bigrams[i] for i in fdist_trigrams_df.iroot])
-    # TODOOOO!!!!!!
-    lower_model_indices = [model_dict_bigrams[lower_order_ngram(root, last)] for root, last in zip(fdist_trigrams_df.root, fdist_trigrams_df.lastword)]
-    p_lower_model = np.array([p_bigrams[i] for i in lower_model_indices])
-
-    fdist_trigrams_df['p'] = p_raw + rcoeff * p_lower_model
-    p_trigrams = dict((model_dict_trigrams[' '.join((root, last))], p) for root, last, p in zip(fdist_trigrams_df.root, fdist_trigrams_df.lastword, fdist_trigrams_df.p))
+    fdist_trigrams_df['p'] = compute_knesserney_p_smooth(fdist_trigrams_df, freqsum_trigrams, model_d[3], fdist_bigrams_df, cutoff_corr_trigrams)
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     print("Creating model")
@@ -254,19 +277,19 @@ if __name__ == "__main__":
                         2: model_dict_bigrams}
     model['word_index'] = dict((i, w) for w, i in model_dict_unigrams.items())
     model_ngrams_1 = p_unigrams_df.sort_values(by='p', ascending=False)
-    model_ngrams_2 = fdist_bigrams_df[['iroot', 'ilast', 'p']].sort_values(by='p', ascending=False)
-    model_ngrams_3 = fdist_trigrams_df[['iroot', 'ilast', 'p']].sort_values(by='p', ascending=False)
+    model_ngrams_1['p'] = np.array(model_ngrams_1['p'] * freqsum_unigrams, dtype=np.uint32)
+    model_ngrams_2 = fdist_bigrams_df[fdist_bigrams_df.freq > 1][['iroot', 'ilast', 'p']].sort_values(by='p', ascending=False)
+    model_ngrams_2['p'] = np.array(model_ngrams_2['p'] * freqsum_bigrams, dtype=np.uint32)
+    model_ngrams_3 = fdist_trigrams_df[fdist_trigrams_df.freq > 1][['iroot', 'ilast', 'p']].sort_values(by='p', ascending=False)
+    model_ngrams_3['p'] = np.array(model_ngrams_3['p'] * freqsum_trigrams, dtype=np.uint32)
+
+    needed_bigram_indexes = set(model_ngrams_3.iroot)
+    model_dict_bigrams2 = dict([(s, i) for s, i in model_dict_bigrams.items() if i in needed_bigram_indexes])
 
     model['ngrams'] = {1: model_ngrams_1,
                        2: model_ngrams_2,
                        3: model_ngrams_3}
 
-    model['ngrams_p_dicts'] = {1: p_unigrams,
-                               2: p_bigrams,
-                               3: p_trigrams}
-
-    model['ngrams_rcoeff_dicts'] = {1: rcoeff_unigrams,
-                                    2: rcoeff_bigrams}
     print("Done. Took %f seconds" % (time.time() - start_time))
 
     print("Saving model")
