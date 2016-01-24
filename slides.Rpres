@@ -1,0 +1,97 @@
+Word prediction using an n-gram model
+========================================================
+author: Jose M. Perez-Sanchez
+date: January 24th, 2016
+JHU/Coursera Data Science Specialization Capstone Project
+---------------------------------------------------------
+
+The product
+========================================================
+
+![Text box](textbox.png) morning
+
+<small>
+Instructions
+
+- Wait for the app to load
+- Enter phrase in text box
+- Click the *Complete phrase* button
+- Completion word will appear on the right
+- When text box is empty, suggestions for starting words will appear
+
+Visit the app at [https://iosephus.shinyapps.io/capstone/](https://iosephus.shinyapps.io/capstone/)
+</small>
+
+<small><small><small><small><small>Slide 2 of 5</small></small></small></small></small>
+
+Components
+========================================================
+
+<small>
+The product contains
+- An $n$-gram language model ($n=3$)
+- A Shiny app accessible at [https://iosephus.shinyapps.io/capstone/](https://iosephus.shinyapps.io/capstone/)
+
+The language model was created using
+
+- A corpus extracted from the [HC Corpora](http://www.corpora.heliohost.org/aboutcorpus.html) containing:
+    * English text collected from Twitter, news entries ans blogs
+    * More than 100 million words
+    * [Want to know more?](http://rpubs.com/jmperez/capstone-milestone-report)
+- *R* and the *Quanteda* package
+- *Python* and the *NLTK* library
+
+Model training results are stored in files and loaded by app at startup
+</small>
+
+<small><small><small><small><small>Slide 3 of 5</small></small></small></small></small>
+
+n-gram model
+========================================================
+
+<small>
+How likely a string $s = w_1 ... w_l$ is to appear in the language?
+
+<small>Approximate using $n$-grams:     $P(s) = \prod_{i=1}^{l + 1} p(w_i | w_{i- n + 1}^{i - 1})$</small>
+
+Smooth probabilities using a Modified Kneser-Ney algorithm
+
+<small>$P_{KN} (w_i|w_{i-n+1}^{i-1}) = \frac{c(w_{i-n+1}^{i}) - D(c(w_{i-n+1}^{i}))}{\sum_{w_i} c(w_{i-n+1}^{i})} + \gamma(w_{i-n+1}^{i-1}) P_{KN}(w_i|w_{i-n+2}^{i-1})$</small>
+
+<small><small><small>$D(c=0) = 0;\quad D(c=1) = D_1;\quad D(c=2) = D_2;\quad D(c \geq 3) = D_{3+}$</small></small></small>
+
+<small>$\gamma(w_{i-n+1}^{i-1}) = \frac{D_1 N_1(w_{i-n+1}^{i-1} \bullet) + D_2 N_2(w_{i-n+1}^{i-1} \bullet) + D_{3+} N_3(w_{i-n+1}^{i-1} \bullet)}{\sum_{w_i} c(w_{i-n+1}^{i})}$</small>
+
+<small><small><small>$Y = n_1 / (n_1 + 2 n_2);\quad D_1 = 1 - 2Y n_2 / n_1;\quad D_2 = 2 - 3Y n_3 / n_2;\quad D_{3+} = 3 - 4Y n_4 / n_3$</small></small></small>
+
+<small><small><small>$P_{KN}(w_i) = N_{1+}(\bullet w_i) / \sum_{w_j} N_{1+}(\bullet w_j);\quad N_{k}(\bullet w_i) = |{w_{i-1}: c(w_{i-1} w_{i}) = k}|$</small></small></small>
+
+<small><small><small>Details in *S. F. Chen and J. Goodman. An empirical study of smoothing techniques for
+language modeling. Computer Speech and Language (1999) 13, 359-394*</small></small></small>
+</small>
+
+<small><small><small><small><small>Slide 4 of 5</small></small></small></small></small>
+
+
+
+Implementation details
+========================================================
+
+<small><small>
+Model:
+- Replace URLs/emails with placeholders (confuses sentence tokenization).
+- Tokenize sentences and words (use \<s\>\</s\> to delimit sentences).
+- Replace numbers an numeric ordinals with placeholders (\<num\>, \<ord\>)
+- Vocabulary: NLTK *words* corpus and training corpus words with freq > 50
+- Replace out-of-vocabulary words with \<unk\> placeholder
+- Compute frequencies for $1$-grams, $2$-grams and $3$-grams.
+- Compute smooth probabilities using Modified Kneser-Ney.
+- Use frequency cutoff for $2$-grams and $3$-grams (freq > 1)
+
+App:
+- Tokenize input phrase into words (add \<s\> at beginning of sentence).
+- Recursively (3-2-1) search $n$-grams with highest smooth probability starting with $(n-1)$ last input words.
+- Display result to user.
+</small></small>
+
+<small><small><small><small><small>Slide 5 of 5</small></small></small></small></small>
